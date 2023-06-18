@@ -5,10 +5,15 @@
 //
 use std::cmp;
 use std::collections::hash_map::Entry as HashEntry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 
-use {BddFunc, BddLabel, LabelBdd, BDD_ONE, BDD_ZERO};
+use crate::BddFunc;
+use crate::BddLabel;
+use crate::LabelBdd;
+use crate::BDD_ONE;
+use crate::BDD_ZERO;
 
 #[derive(Clone, Debug, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub(crate) enum IddFunc {
@@ -86,7 +91,7 @@ impl LabelIdd {
             let hi = l.from_bdd_func(n.hi);
             let label = n.label;
             let n = IddNode {
-                label: label,
+                label,
                 lo: lo.clone(),
                 hi: hi.clone(),
                 max: cmp::max(l.max_value(lo.clone()), l.max_value(hi.clone())),
@@ -113,7 +118,7 @@ impl LabelIdd {
             return lo;
         }
         let n = IddNode {
-            label: label,
+            label,
             lo: lo.clone(),
             hi: hi.clone(),
             max: cmp::max(self.max_value(lo.clone()), self.max_value(hi.clone())),
@@ -125,7 +130,7 @@ impl LabelIdd {
                 self.nodes.push(n);
                 v.insert(f.clone());
                 IddFunc::Node(f)
-            }
+            },
         }
     }
 

@@ -4,18 +4,23 @@
 // License.
 //
 
-use itertools::Itertools;
 use std::cmp;
 use std::collections::hash_map::Entry as HashEntry;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::usize;
 
-use cubes::{Cube, CubeList, CubeVar};
-use idd::*;
-use Expr;
+use itertools::Itertools;
+
+use crate::cubes::Cube;
+use crate::cubes::CubeList;
+use crate::cubes::CubeVar;
+use crate::idd::*;
+use crate::Expr;
 
 /// A `BddFunc` is a function index within a particular `Bdd`. It must only
 /// be used with the `Bdd` instance which produced it.
@@ -77,9 +82,9 @@ impl LabelBdd {
             return lo;
         }
         let n = BddNode {
-            label: label,
-            lo: lo,
-            hi: hi,
+            label,
+            lo,
+            hi,
             varcount: cmp::min(self.sat_varcount(lo), self.sat_varcount(hi) + 1),
         };
         match self.dedup_hash.entry(n.clone()) {
@@ -89,7 +94,7 @@ impl LabelBdd {
                 self.nodes.push(n);
                 v.insert(idx);
                 idx
-            }
+            },
         }
     }
 
@@ -237,7 +242,7 @@ impl LabelBdd {
                     .as_ref()
                     .unwrap()
                     .with_var(label as usize, CubeVar::False)
-            }
+            },
         };
         let hi_list = match hi {
             BDD_ZERO => CubeList::new(),
@@ -249,7 +254,7 @@ impl LabelBdd {
                     .as_ref()
                     .unwrap()
                     .with_var(label as usize, CubeVar::True)
-            }
+            },
         };
         let new_list = lo_list.merge(&hi_list);
         memoize_vec[n] = Some(new_list);
@@ -263,14 +268,14 @@ impl LabelBdd {
                 &CubeVar::True => Some(Expr::Terminal(i)),
                 &CubeVar::DontCare => None,
             })
-            .fold1(|a, b| Expr::and(a, b))
+            .reduce(|a, b| Expr::and(a, b))
             .unwrap_or(Expr::Const(true))
     }
 
     fn cubelist_to_expr(&self, c: &CubeList) -> Expr<BddLabel> {
         c.cubes()
             .map(|c| self.cube_to_expr(c))
-            .fold1(|a, b| Expr::or(a, b))
+            .reduce(|a, b| Expr::or(a, b))
             .unwrap_or(Expr::Const(false))
     }
 
@@ -300,7 +305,7 @@ impl LabelBdd {
         let satisfied_count = idd_funcs
             .iter()
             .cloned()
-            .fold1(|a, b| idd.add(a.clone(), b.clone()))
+            .reduce(|a, b| idd.add(a.clone(), b.clone()))
             .unwrap();
 
         // Now, find the maximum reachable count.
@@ -362,7 +367,7 @@ where
                 v.insert(next_id);
                 self.rev_labels.push(t);
                 next_id
-            }
+            },
         }
     }
 
@@ -436,17 +441,17 @@ where
             &Expr::Not(ref x) => {
                 let xval = self.from_expr(&**x);
                 self.not(xval)
-            }
+            },
             &Expr::And(ref a, ref b) => {
                 let aval = self.from_expr(&**a);
                 let bval = self.from_expr(&**b);
                 self.and(aval, bval)
-            }
+            },
             &Expr::Or(ref a, ref b) => {
                 let aval = self.from_expr(&**a);
                 let bval = self.from_expr(&**b);
                 self.or(aval, bval)
-            }
+            },
         }
     }
 
@@ -497,7 +502,7 @@ where
                     self.sat_one_internal(lo, assignments);
                 }
                 true
-            }
+            },
         }
     }
 
@@ -670,7 +675,7 @@ where
         assert!(bdd.labels.len() == 0);
         assert!(bdd.rev_labels.len() == 0);
         assert!(bdd.bdd.nodes.len() == 0);
-        BddLoader { bdd: bdd }
+        BddLoader { bdd }
     }
 
     /// Inject a new label into the BDD. The `id` must be the next consecutive
@@ -689,8 +694,8 @@ where
         assert!(id == self.bdd.bdd.nodes.len() as BddFunc);
         let n = BddNode {
             label: label_id as BddLabel,
-            lo: lo,
-            hi: hi,
+            lo,
+            hi,
             varcount: cmp::min(
                 self.bdd.bdd.sat_varcount(lo),
                 self.bdd.bdd.sat_varcount(hi) + 1,
@@ -703,14 +708,15 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::cell::RefCell;
     use std::collections::HashMap;
-    use Expr;
-    extern crate rand;
-    extern crate rand_xorshift;
-    use self::rand::{Rng, SeedableRng};
-    use self::rand_xorshift::XorShiftRng;
+
+    use indoc::indoc;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
+
+    use super::*;
 
     fn term_hashmap(vals: &[bool], h: &mut HashMap<u32, bool>) {
         h.clear();
@@ -775,8 +781,8 @@ mod test {
     }
 
     fn random_expr<R: Rng>(r: &mut R, nterminals: usize) -> Expr<u32> {
-        match r.gen_range(0, 5) {
-            0 => Expr::Terminal(r.gen_range(0, nterminals) as u32),
+        match r.gen_range(0..=4) {
+            0 => Expr::Terminal(r.gen_range(0..nterminals) as u32),
             1 => Expr::Const(r.gen::<bool>()),
             2 => Expr::Not(Box::new(random_expr(r, nterminals))),
             3 => Expr::And(

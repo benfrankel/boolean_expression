@@ -8,8 +8,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use Expr;
-use Bdd;
+use crate::Bdd;
+use crate::Expr;
 
 struct SimplifyContext<T> {
     changed: bool,
@@ -53,9 +53,9 @@ where
                             changed = false;
                             Expr::And(Box::new(self.step(x)), Box::new(self.step(y)))
                         }
-                    }
+                    },
                 }
-            }
+            },
             Expr::Or(x, y) => {
                 changed = true;
                 let (x, y) = (*x, *y);
@@ -71,9 +71,9 @@ where
                             changed = false;
                             Expr::Or(Box::new(self.step(x)), Box::new(self.step(y)))
                         }
-                    }
+                    },
                 }
-            }
+            },
             Expr::Not(x) => {
                 changed = true;
                 let x = *x;
@@ -92,9 +92,9 @@ where
                     x => {
                         changed = false;
                         Expr::Not(Box::new(self.step(x)))
-                    }
+                    },
                 }
-            }
+            },
             Expr::Terminal(t) => Expr::Terminal(t),
             Expr::Const(c) => Expr::Const(c),
         };
@@ -132,10 +132,12 @@ where
 }
 
 mod test {
-    use super::*;
     use std::fmt::Debug;
     use std::hash::Hash;
+
     use Expr;
+
+    use super::*;
 
     fn run_test<T>(orig: Expr<T>, expected: Expr<T>)
     where

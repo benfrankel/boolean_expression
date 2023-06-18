@@ -8,9 +8,15 @@ use std::cmp::Ord;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
+use std::ops::BitAnd;
+use std::ops::BitAndAssign;
+use std::ops::BitOr;
+use std::ops::BitOrAssign;
+use std::ops::BitXor;
+use std::ops::BitXorAssign;
+use std::ops::Not;
 
-use simplify;
+use crate::simplify;
 
 /// An `Expr` is a simple Boolean logic expression. It may contain terminals
 /// (i.e., free variables), constants, and the following fundamental operations:
