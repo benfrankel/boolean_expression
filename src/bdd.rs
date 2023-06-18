@@ -452,7 +452,7 @@ impl<T: Clone> Bdd<T> {
     pub fn to_expr(&self, f: BddFunc) -> Expr<T> {
         self.bdd
             .to_expr(f, self.rev_labels.len())
-            .map(|t: &BddLabel| self.rev_labels[*t].clone())
+            .map(|t| self.rev_labels[*t].clone())
     }
 }
 
