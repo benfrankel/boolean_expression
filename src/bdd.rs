@@ -318,7 +318,7 @@ impl LabelBdd {
     pub fn max_sat(&mut self, funcs: &[BddFunc]) -> BddFunc {
         // First, construct an IDD function for each BDD function,
         // with value 1 if true and 0 if false. Then add these
-        // together to obtain a single Idd function whose value is the
+        // together to obtain a single IDD function whose value is the
         // number of satisfied (true) BDD functions.
         let mut idd = LabelIdd::from_bdd(self);
         let satisfied_count = funcs
@@ -459,7 +459,7 @@ impl<T: Clone> Bdd<T> {
 impl<T: Debug> Bdd<T> {
     /// Export BDD to `dot` format (from the graphviz package) to enable visualization.
     pub fn to_dot(&self, f: BddFunc) -> String {
-        // the algorithm starts at the f Bddfunction and then recursively collects all BddNodes
+        // the algorithm starts at the f BDD function and then recursively collects all BddNodes
         // until BDD_ZERO and BDD_ONE. The output for each node is straightforward: just a single
         // `dot` node.
         let mut out = String::from("digraph bdd {\n");
