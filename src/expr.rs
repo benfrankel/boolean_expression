@@ -16,6 +16,9 @@ use std::ops::BitXor;
 use std::ops::BitXorAssign;
 use std::ops::Not;
 
+#[cfg(feature = "bevy_reflect")]
+use bevy_reflect_derive::{FromReflect, Reflect};
+
 use crate::simplify;
 
 /// An `Expr` is a simple Boolean logic expression. It may contain terminals
@@ -42,6 +45,7 @@ use crate::simplify;
 /// assert!(allowed.evaluate(&items));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "bevy_reflect", derive(Reflect, FromReflect))]
 pub enum Expr<T> {
     /// A terminal (free variable). This expression node represents a value that
     /// is not known until evaluation time.

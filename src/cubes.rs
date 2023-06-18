@@ -10,8 +10,12 @@ use std::collections::VecDeque;
 use std::iter;
 use std::slice;
 
+#[cfg(feature = "bevy_reflect")]
+use bevy_reflect_derive::{FromReflect, Reflect};
+
 /// A variable assignment in a cube.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "bevy_reflect", derive(Reflect, FromReflect))]
 pub enum CubeVar {
     /// This variable must be false.
     False,

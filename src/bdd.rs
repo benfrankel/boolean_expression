@@ -14,6 +14,8 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+#[cfg(feature = "bevy_reflect")]
+use bevy_reflect_derive::{FromReflect, Reflect};
 use itertools::Itertools;
 
 use crate::cubes::Cube;
@@ -34,6 +36,7 @@ pub const BDD_ONE: BddFunc = usize::MAX - 1;
 pub(crate) type BddLabel = usize;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "bevy_reflect", derive(Reflect, FromReflect))]
 pub(crate) struct BddNode {
     pub label: BddLabel,
     pub lo: BddFunc,
@@ -64,6 +67,7 @@ impl Debug for BddNode {
 }
 
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "bevy_reflect", derive(Reflect, FromReflect))]
 pub struct LabelBdd {
     pub(crate) nodes: Vec<BddNode>,
     dedup_hash: HashMap<BddNode, BddFunc>,
@@ -356,6 +360,7 @@ impl LabelBdd {
 /// BDD size, but BDDs may have exponential size (relative to terminal count)
 /// in the worst case.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "bevy_reflect", derive(Reflect, FromReflect))]
 pub struct Bdd<T> {
     bdd: LabelBdd,
     labels: HashMap<T, BddLabel>,

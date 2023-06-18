@@ -8,7 +8,16 @@ repository = "https://github.com/cfallin/boolean_expression"
 documentation = "https://cfallin.github.io/boolean_expression/boolean_expression/"
 license = "MIT"
 
+[features]
+default = []
+bevy_reflect = [
+    "dep:bevy_reflect",
+    "dep:bevy_reflect_derive",
+]
+
 [dependencies]
+bevy_reflect = { version = "0.10", optional = true }
+bevy_reflect_derive = { version = "0.10", optional = true }
 smallvec = "1"
 itertools = "0.10"
 
