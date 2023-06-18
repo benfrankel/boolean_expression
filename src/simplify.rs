@@ -16,17 +16,22 @@ struct SimplifyContext<T> {
     _t: PhantomData<T>,
 }
 
-impl<T> SimplifyContext<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
-    pub fn new() -> SimplifyContext<T> {
-        SimplifyContext {
-            changed: false,
-            _t: PhantomData,
+impl<T> Default for SimplifyContext<T> {
+    fn default() -> Self {
+        Self {
+            changed: Default::default(),
+            _t: Default::default(),
         }
     }
+}
 
+impl<T> SimplifyContext<T> {
+    pub fn new() -> SimplifyContext<T> {
+        Self::default()
+    }
+}
+
+impl<T: PartialEq + Clone> SimplifyContext<T> {
     fn step(&mut self, e: Expr<T>) -> Expr<T> {
         let mut changed = false;
         let newval = match e {
@@ -53,9 +58,9 @@ where
                             changed = false;
                             Expr::And(Box::new(self.step(x)), Box::new(self.step(y)))
                         }
-                    },
+                    }
                 }
-            },
+            }
             Expr::Or(x, y) => {
                 changed = true;
                 let (x, y) = (*x, *y);
@@ -71,9 +76,9 @@ where
                             changed = false;
                             Expr::Or(Box::new(self.step(x)), Box::new(self.step(y)))
                         }
-                    },
+                    }
                 }
-            },
+            }
             Expr::Not(x) => {
                 changed = true;
                 let x = *x;
@@ -92,9 +97,9 @@ where
                     x => {
                         changed = false;
                         Expr::Not(Box::new(self.step(x)))
-                    },
+                    }
                 }
-            },
+            }
             Expr::Terminal(t) => Expr::Terminal(t),
             Expr::Const(c) => Expr::Const(c),
         };
@@ -105,10 +110,7 @@ where
     }
 }
 
-pub fn simplify_via_laws<T>(e: Expr<T>) -> Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+pub fn simplify_via_laws<T: PartialEq + Clone>(e: Expr<T>) -> Expr<T> {
     let mut ctx = SimplifyContext::new();
     let mut e = e;
     ctx.changed = true;
@@ -122,10 +124,7 @@ where
 
 // This expression simplification path is tested via the tests for
 // `Bdd::from_expr` and `Bdd::to_expr`, so we don't replicate those tests here.
-pub fn simplify_via_bdd<T>(e: Expr<T>) -> Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+pub fn simplify_via_bdd<T: Eq + Hash + Clone>(e: Expr<T>) -> Expr<T> {
     let mut bdd = Bdd::new();
     let f = bdd.from_expr(&e);
     bdd.to_expr(f)
@@ -139,16 +138,13 @@ mod test {
 
     use super::*;
 
-    fn run_test<T>(orig: Expr<T>, expected: Expr<T>)
-    where
-        T: Clone + Debug + Eq + Hash,
-    {
+    fn run_test<T: PartialEq + Clone + Debug>(orig: Expr<T>, expected: Expr<T>) {
         let output = simplify_via_laws(orig.clone());
         println!(
             "Simplify: {:?} -> {:?} (expected {:?})",
             orig, output, expected
         );
-        assert!(output == expected);
+        assert_eq!(output, expected);
     }
 
     #[test]

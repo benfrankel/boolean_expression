@@ -42,10 +42,7 @@ use crate::simplify;
 /// assert!(allowed.evaluate(&items));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+pub enum Expr<T> {
     /// A terminal (free variable). This expression node represents a value that
     /// is not known until evaluation time.
     Terminal(T),
@@ -62,84 +59,48 @@ where
     Or(Box<Expr<T>>, Box<Expr<T>>),
 }
 
-impl<T> Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+impl<T> Expr<T> {
     /// Returns `true` if this `Expr` is a terminal.
     pub fn is_terminal(&self) -> bool {
-        match self {
-            &Expr::Terminal(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Terminal(..))
     }
 
     /// Returns `true` if this `Expr` is a constant.
     pub fn is_const(&self) -> bool {
-        match self {
-            &Expr::Const(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Const(..))
     }
 
     /// Returns `true` if this `Expr` is a NOT node.
     pub fn is_not(&self) -> bool {
-        match self {
-            &Expr::Not(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Not(..))
     }
 
     /// Returns `true` if this `Expr` is an AND node.
     pub fn is_and(&self) -> bool {
-        match self {
-            &Expr::And(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Self::And(..))
     }
 
     /// Returns `true` if this `Expr` is an OR node.
     pub fn is_or(&self) -> bool {
-        match self {
-            &Expr::Or(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Self::Or(..))
     }
 
     /// Builds a NOT node around an argument, consuming the argument
     /// expression.
-    pub fn not(e: Expr<T>) -> Expr<T> {
-        Expr::Not(Box::new(e))
+    pub fn not(self) -> Self {
+        Self::Not(Box::new(self))
     }
 
     /// Builds an AND node around two arguments, consuming the argument
     /// expressions.
-    pub fn and(e1: Expr<T>, e2: Expr<T>) -> Expr<T> {
-        Expr::And(Box::new(e1), Box::new(e2))
+    pub fn and(self, rhs: Self) -> Self {
+        Self::And(Box::new(self), Box::new(rhs))
     }
 
     /// Builds an OR node around two arguments, consuming the argument
     /// expressions.
-    pub fn or(e1: Expr<T>, e2: Expr<T>) -> Expr<T> {
-        Expr::Or(Box::new(e1), Box::new(e2))
-    }
-
-    pub fn xor(e1: Expr<T>, e2: Expr<T>) -> Expr<T> {
-        let nand = !(e1.clone() & e2.clone());
-        let or = e1 | e2;
-        nand & or
-    }
-
-    /// Evaluates the expression with a particular set of terminal assignments.
-    /// If any terminals are not assigned, they default to `false`.
-    pub fn evaluate(&self, vals: &HashMap<T, bool>) -> bool {
-        match self {
-            &Expr::Terminal(ref t) => *vals.get(t).unwrap_or(&false),
-            &Expr::Const(val) => val,
-            &Expr::And(ref a, ref b) => a.evaluate(vals) && b.evaluate(vals),
-            &Expr::Or(ref a, ref b) => a.evaluate(vals) || b.evaluate(vals),
-            &Expr::Not(ref x) => !x.evaluate(vals),
-        }
+    pub fn or(self, rhs: Self) -> Self {
+        Self::Or(Box::new(self), Box::new(rhs))
     }
 
     /// Evaluates the expression using the provided function to map terminals
@@ -159,22 +120,53 @@ where
     where
         F: Fn(&T) -> bool,
     {
-        self.evaluate_with1(&f)
+        self.evaluate_with_helper(&f)
     }
 
-    fn evaluate_with1<F>(&self, f: &F) -> bool
+    fn evaluate_with_helper<F>(&self, f: F) -> bool
     where
-        F: Fn(&T) -> bool,
+        F: Copy + Fn(&T) -> bool,
     {
         match self {
-            Expr::Terminal(t) => f(t),
-            Expr::Const(val) => *val,
-            Expr::And(a, b) => a.evaluate_with1(f) && b.evaluate_with1(f),
-            Expr::Or(a, b) => a.evaluate_with1(f) || b.evaluate_with1(f),
-            Expr::Not(x) => !x.evaluate_with1(f),
+            Self::Terminal(t) => f(t),
+            Self::Const(val) => *val,
+            Self::And(a, b) => a.evaluate_with_helper(f) && b.evaluate_with_helper(f),
+            Self::Or(a, b) => a.evaluate_with_helper(f) || b.evaluate_with_helper(f),
+            Self::Not(x) => !x.evaluate_with_helper(f),
         }
     }
 
+    /// Map terminal values using the specified mapping function.
+    pub fn map<F, R>(&self, f: F) -> Expr<R>
+    where
+        F: Fn(&T) -> R,
+    {
+        self.map_helper(&f)
+    }
+
+    fn map_helper<F, R>(&self, f: F) -> Expr<R>
+    where
+        F: Copy + Fn(&T) -> R,
+    {
+        match self {
+            &Self::Terminal(ref t) => Expr::Terminal(f(t)),
+            &Self::Const(val) => Expr::Const(val),
+            &Self::Not(ref n) => Expr::not(n.map_helper(f)),
+            &Self::And(ref a, ref b) => Expr::and(a.map_helper(f), b.map_helper(f)),
+            &Self::Or(ref a, ref b) => Expr::or(a.map_helper(f), b.map_helper(f)),
+        }
+    }
+}
+
+impl<T: Clone> Expr<T> {
+    pub fn xor(self, rhs: Self) -> Self {
+        let nand = !(self.clone() & rhs.clone());
+        let or = self | rhs;
+        nand & or
+    }
+}
+
+impl<T: PartialEq + Clone> Expr<T> {
     /// Simplify an expression in a relatively cheap way using well-known logic
     /// identities.
     ///
@@ -212,10 +204,26 @@ where
     /// ```
     ///
     /// For better (but more expensive) simplification, see `simplify_via_bdd()`.
-    pub fn simplify_via_laws(self) -> Expr<T> {
+    pub fn simplify_via_laws(self) -> Self {
         simplify::simplify_via_laws(self)
     }
+}
 
+impl<T: Eq + Hash> Expr<T> {
+    /// Evaluates the expression with a particular set of terminal assignments.
+    /// If any terminals are not assigned, they default to `false`.
+    pub fn evaluate(&self, vals: &HashMap<T, bool>) -> bool {
+        match self {
+            &Self::Terminal(ref t) => *vals.get(t).unwrap_or(&false),
+            &Self::Const(val) => val,
+            &Self::And(ref a, ref b) => a.evaluate(vals) && b.evaluate(vals),
+            &Self::Or(ref a, ref b) => a.evaluate(vals) || b.evaluate(vals),
+            &Self::Not(ref x) => !x.evaluate(vals),
+        }
+    }
+}
+
+impl<T: Eq + Hash + Clone> Expr<T> {
     /// Simplify an expression via a roundtrip through a `Bdd`. This procedure
     /// is more effective than `Expr::simplify_via_laws()`, but more expensive.
     /// This roundtrip will implicitly simplify an arbitrarily complicated
@@ -233,101 +241,57 @@ where
     /// let simplified = expr.simplify_via_bdd();
     /// assert_eq!(simplified, Expr::Terminal(0));
     /// ```
-    pub fn simplify_via_bdd(self) -> Expr<T> {
+    pub fn simplify_via_bdd(self) -> Self {
         simplify::simplify_via_bdd(self)
-    }
-
-    /// Map terminal values using the specified mapping function.
-    pub fn map<F, R>(&self, f: F) -> Expr<R>
-    where
-        F: Fn(&T) -> R,
-        R: Clone + Debug + Eq + Hash,
-    {
-        self.map1(&f)
-    }
-
-    fn map1<F, R>(&self, f: &F) -> Expr<R>
-    where
-        F: Fn(&T) -> R,
-        R: Clone + Debug + Eq + Hash,
-    {
-        match self {
-            &Expr::Terminal(ref t) => Expr::Terminal(f(t)),
-            &Expr::Const(val) => Expr::Const(val),
-            &Expr::Not(ref n) => Expr::not(n.map1(f)),
-            &Expr::And(ref a, ref b) => Expr::and(a.map1(f), b.map1(f)),
-            &Expr::Or(ref a, ref b) => Expr::or(a.map1(f), b.map1(f)),
-        }
     }
 }
 
-impl<T> Not for Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+impl<T> Not for Expr<T> {
     type Output = Self;
 
     fn not(self) -> Self::Output {
-        Self::not(self)
+        self.not()
     }
 }
 
-impl<T> BitAnd<Expr<T>> for Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+impl<T> BitAnd for Expr<T> {
     type Output = Self;
 
-    fn bitand(self, rhs: Expr<T>) -> Self::Output {
-        Self::and(self, rhs)
+    fn bitand(self, rhs: Self) -> Self::Output {
+        self.and(rhs)
     }
 }
 
-impl<T> BitAndAssign<Expr<T>> for Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
-    fn bitand_assign(&mut self, rhs: Expr<T>) {
-        *self = Self::and(self.clone(), rhs);
+impl<T: Clone> BitAndAssign for Expr<T> {
+    fn bitand_assign(&mut self, rhs: Self) {
+        *self = self.clone().and(rhs);
     }
 }
 
-impl<T> BitOr<Expr<T>> for Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+impl<T> BitOr for Expr<T> {
     type Output = Self;
 
-    fn bitor(self, rhs: Expr<T>) -> Self::Output {
-        Self::or(self, rhs)
+    fn bitor(self, rhs: Self) -> Self::Output {
+        self.or(rhs)
     }
 }
 
-impl<T> BitOrAssign<Expr<T>> for Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
-    fn bitor_assign(&mut self, rhs: Expr<T>) {
-        *self = Self::or(self.clone(), rhs);
+impl<T: Clone> BitOrAssign for Expr<T> {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = self.clone().or(rhs)
     }
 }
 
-impl<T> BitXor<Expr<T>> for Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
+impl<T: Clone> BitXor for Expr<T> {
     type Output = Self;
 
-    fn bitxor(self, rhs: Expr<T>) -> Self::Output {
-        Self::xor(self, rhs)
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        self.xor(rhs)
     }
 }
 
-impl<T> BitXorAssign<Expr<T>> for Expr<T>
-where
-    T: Clone + Debug + Eq + Hash,
-{
-    fn bitxor_assign(&mut self, rhs: Expr<T>) {
-        *self = Self::xor(self.clone(), rhs);
+impl<T: Clone> BitXorAssign for Expr<T> {
+    fn bitxor_assign(&mut self, rhs: Self) {
+        *self = self.clone().xor(rhs);
     }
 }

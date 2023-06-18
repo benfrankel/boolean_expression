@@ -3,6 +3,7 @@
 // Copyright (c) 2016-2018 Chris Fallin <cfallin@c1f.net>. Released under the MIT
 // License.
 //
+
 use std::cmp;
 use std::collections::hash_map::Entry as HashEntry;
 use std::collections::HashMap;
@@ -39,7 +40,7 @@ impl fmt::Debug for IddNode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct LabelIdd {
     nodes: Vec<IddNode>,
     dedup_hash: HashMap<IddNode, usize>,
@@ -56,39 +57,49 @@ impl fmt::Debug for LabelIdd {
 }
 
 impl IddFunc {
+    pub(crate) fn from_bdd_func(f: BddFunc) -> Self {
+        if f == BDD_ZERO {
+            Self::Const(0)
+        } else if f == BDD_ONE {
+            Self::Const(1)
+        } else {
+            Self::Node(f)
+        }
+    }
+
     pub fn as_const(&self) -> Option<isize> {
         match self {
-            &IddFunc::Const(i) => Some(i),
+            &Self::Const(i) => Some(i),
             _ => None,
         }
     }
+
     pub fn is_const(&self) -> bool {
         self.as_const().is_some()
     }
+
     pub fn as_node_idx(&self) -> Option<usize> {
         match self {
-            &IddFunc::Node(i) => Some(i),
+            &Self::Node(i) => Some(i),
             _ => None,
         }
     }
+
     pub fn is_node_idx(&self) -> bool {
         self.as_node_idx().is_some()
     }
 }
 
 impl LabelIdd {
-    pub fn new() -> LabelIdd {
-        LabelIdd {
-            nodes: Vec::new(),
-            dedup_hash: HashMap::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub(crate) fn from_bdd(bdd: &LabelBdd) -> LabelIdd {
-        let mut l = LabelIdd::new();
+    pub(crate) fn from_bdd(bdd: &LabelBdd) -> Self {
+        let mut l = Self::new();
         for n in &bdd.nodes {
-            let lo = l.from_bdd_func(n.lo);
-            let hi = l.from_bdd_func(n.hi);
+            let lo = IddFunc::from_bdd_func(n.lo);
+            let hi = IddFunc::from_bdd_func(n.hi);
             let label = n.label;
             let n = IddNode {
                 label,
@@ -101,16 +112,6 @@ impl LabelIdd {
             l.nodes.push(n);
         }
         l
-    }
-
-    pub(crate) fn from_bdd_func(&self, f: BddFunc) -> IddFunc {
-        if f == BDD_ZERO {
-            IddFunc::Const(0)
-        } else if f == BDD_ONE {
-            IddFunc::Const(1)
-        } else {
-            IddFunc::Node(f)
-        }
     }
 
     fn get_node(&mut self, label: BddLabel, lo: IddFunc, hi: IddFunc) -> IddFunc {
@@ -314,9 +315,9 @@ mod test {
         let x3_bdd = bdd.not(x1_bdd);
         let x4_bdd = bdd.or(x2_bdd, x3_bdd);
         let idd = LabelIdd::from_bdd(&bdd);
-        assert!(idd.evaluate(idd.from_bdd_func(x4_bdd), &[true, false]) == Some(1));
-        assert!(idd.evaluate(idd.from_bdd_func(x4_bdd), &[false, false]) == Some(1));
-        assert!(idd.evaluate(idd.from_bdd_func(x4_bdd), &[false, true]) == Some(0));
+        assert!(idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[true, false]) == Some(1));
+        assert!(idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[false, false]) == Some(1));
+        assert!(idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[false, true]) == Some(0));
     }
 
     #[test]
