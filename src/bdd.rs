@@ -17,26 +17,26 @@ use cubes::{Cube, CubeList, CubeVar};
 use idd::*;
 use Expr;
 
-/// A `BDDFunc` is a function index within a particular `BDD`. It must only
-/// be used with the `BDD` instance which produced it.
-pub type BDDFunc = usize;
+/// A `BddFunc` is a function index within a particular `Bdd`. It must only
+/// be used with the `Bdd` instance which produced it.
+pub type BddFunc = usize;
 
-/// A special terminal `BDDFunc` which is constant `false` (zero).
-pub const BDD_ZERO: BDDFunc = usize::MAX;
-/// A special terminal `BDDFunc` which is constant `true` (one).
-pub const BDD_ONE: BDDFunc = usize::MAX - 1;
+/// A special terminal `BddFunc` which is constant `false` (zero).
+pub const BDD_ZERO: BddFunc = usize::MAX;
+/// A special terminal `BddFunc` which is constant `true` (one).
+pub const BDD_ONE: BddFunc = usize::MAX - 1;
 
-pub(crate) type BDDLabel = usize;
+pub(crate) type BddLabel = usize;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub(crate) struct BDDNode {
-    pub label: BDDLabel,
-    pub lo: BDDFunc,
-    pub hi: BDDFunc,
+pub(crate) struct BddNode {
+    pub label: BddLabel,
+    pub lo: BddFunc,
+    pub hi: BddFunc,
     pub varcount: usize,
 }
 
-fn bdd_func_str(b: BDDFunc) -> String {
+fn bdd_func_str(b: BddFunc) -> String {
     if b == BDD_ZERO {
         "ZERO".to_owned()
     } else if b == BDD_ONE {
@@ -46,11 +46,11 @@ fn bdd_func_str(b: BDDFunc) -> String {
     }
 }
 
-impl fmt::Debug for BDDNode {
+impl fmt::Debug for BddNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "BDDNode(label = {}, lo = {}, hi = {})",
+            "BddNode(label = {}, lo = {}, hi = {})",
             self.label,
             bdd_func_str(self.lo),
             bdd_func_str(self.hi)
@@ -59,24 +59,24 @@ impl fmt::Debug for BDDNode {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct LabelBDD {
-    pub nodes: Vec<BDDNode>,
-    dedup_hash: HashMap<BDDNode, BDDFunc>,
+pub(crate) struct LabelBdd {
+    pub nodes: Vec<BddNode>,
+    dedup_hash: HashMap<BddNode, BddFunc>,
 }
 
-impl LabelBDD {
-    pub fn new() -> LabelBDD {
-        LabelBDD {
+impl LabelBdd {
+    pub fn new() -> LabelBdd {
+        LabelBdd {
             nodes: Vec::new(),
             dedup_hash: HashMap::new(),
         }
     }
 
-    fn get_node(&mut self, label: BDDLabel, lo: BDDFunc, hi: BDDFunc) -> BDDFunc {
+    fn get_node(&mut self, label: BddLabel, lo: BddFunc, hi: BddFunc) -> BddFunc {
         if lo == hi {
             return lo;
         }
-        let n = BDDNode {
+        let n = BddNode {
             label: label,
             lo: lo,
             hi: hi,
@@ -85,7 +85,7 @@ impl LabelBDD {
         match self.dedup_hash.entry(n.clone()) {
             HashEntry::Occupied(o) => *o.get(),
             HashEntry::Vacant(v) => {
-                let idx = self.nodes.len() as BDDFunc;
+                let idx = self.nodes.len() as BddFunc;
                 self.nodes.push(n);
                 v.insert(idx);
                 idx
@@ -93,7 +93,7 @@ impl LabelBDD {
         }
     }
 
-    fn sat_varcount(&self, f: BDDFunc) -> usize {
+    fn sat_varcount(&self, f: BddFunc) -> usize {
         if f == BDD_ZERO || f == BDD_ONE {
             0
         } else {
@@ -101,11 +101,11 @@ impl LabelBDD {
         }
     }
 
-    pub fn terminal(&mut self, label: BDDLabel) -> BDDFunc {
+    pub fn terminal(&mut self, label: BddLabel) -> BddFunc {
         self.get_node(label, BDD_ZERO, BDD_ONE)
     }
 
-    pub fn constant(&mut self, value: bool) -> BDDFunc {
+    pub fn constant(&mut self, value: bool) -> BddFunc {
         if value {
             BDD_ONE
         } else {
@@ -116,7 +116,7 @@ impl LabelBDD {
     /// Restrict: fundamental building block of logical combinators. Takes a
     /// Shannon cofactor: i.e., returns a new function based on `f` but with the
     /// given label forced to the given value.
-    pub fn restrict(&mut self, f: BDDFunc, label: BDDLabel, val: bool) -> BDDFunc {
+    pub fn restrict(&mut self, f: BddFunc, label: BddLabel, val: bool) -> BddFunc {
         if f == BDD_ZERO {
             return BDD_ZERO;
         }
@@ -140,7 +140,7 @@ impl LabelBDD {
         }
     }
 
-    fn min_label(&self, f: BDDFunc) -> Option<BDDLabel> {
+    fn min_label(&self, f: BddFunc) -> Option<BddLabel> {
         if f == BDD_ZERO || f == BDD_ONE {
             None
         } else {
@@ -151,7 +151,7 @@ impl LabelBDD {
     /// If-then-else: fundamental building block of logical combinators. Works
     /// by divide-and-conquer: split on the lowest appearing label, take Shannon
     /// cofactors for the two cases, recurse, and recombine with a new node.
-    pub fn ite(&mut self, i: BDDFunc, t: BDDFunc, e: BDDFunc) -> BDDFunc {
+    pub fn ite(&mut self, i: BddFunc, t: BddFunc, e: BddFunc) -> BddFunc {
         if i == BDD_ONE {
             t
         } else if i == BDD_ZERO {
@@ -178,29 +178,29 @@ impl LabelBDD {
         }
     }
 
-    pub fn not(&mut self, n: BDDFunc) -> BDDFunc {
+    pub fn not(&mut self, n: BddFunc) -> BddFunc {
         self.ite(n, BDD_ZERO, BDD_ONE)
     }
 
-    pub fn and(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn and(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         self.ite(a, b, BDD_ZERO)
     }
 
-    pub fn or(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn or(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         self.ite(a, BDD_ONE, b)
     }
 
-    pub fn xor(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn xor(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         let not_b = self.not(b);
         self.ite(a, not_b, b)
     }
 
-    pub fn implies(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn implies(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         let not_a = self.not(a);
         self.or(not_a, b)
     }
 
-    pub fn evaluate(&self, func: BDDFunc, inputs: &[bool]) -> Option<bool> {
+    pub fn evaluate(&self, func: BddFunc, inputs: &[bool]) -> Option<bool> {
         let mut f = func;
         for (i, val) in inputs.iter().enumerate() {
             if f == BDD_ZERO || f == BDD_ONE {
@@ -220,7 +220,7 @@ impl LabelBDD {
         }
     }
 
-    fn compute_cubelist(&self, memoize_vec: &mut Vec<Option<CubeList>>, n: BDDFunc, nvars: usize) {
+    fn compute_cubelist(&self, memoize_vec: &mut Vec<Option<CubeList>>, n: BddFunc, nvars: usize) {
         if memoize_vec[n].is_some() {
             return;
         }
@@ -255,7 +255,7 @@ impl LabelBDD {
         memoize_vec[n] = Some(new_list);
     }
 
-    fn cube_to_expr(&self, c: &Cube) -> Expr<BDDLabel> {
+    fn cube_to_expr(&self, c: &Cube) -> Expr<BddLabel> {
         c.vars()
             .enumerate()
             .flat_map(|(i, v)| match v {
@@ -267,14 +267,14 @@ impl LabelBDD {
             .unwrap_or(Expr::Const(true))
     }
 
-    fn cubelist_to_expr(&self, c: &CubeList) -> Expr<BDDLabel> {
+    fn cubelist_to_expr(&self, c: &CubeList) -> Expr<BddLabel> {
         c.cubes()
             .map(|c| self.cube_to_expr(c))
             .fold1(|a, b| Expr::or(a, b))
             .unwrap_or(Expr::Const(false))
     }
 
-    pub fn to_expr(&self, func: BDDFunc, nvars: usize) -> Expr<BDDLabel> {
+    pub fn to_expr(&self, func: BddFunc, nvars: usize) -> Expr<BddLabel> {
         if func == BDD_ZERO {
             Expr::Const(false)
         } else if func == BDD_ONE {
@@ -290,12 +290,12 @@ impl LabelBDD {
 
     /// Returns a function that is true whenever the maximum number of
     /// functions in `funcs` are true.
-    pub fn max_sat(&mut self, funcs: &[BDDFunc]) -> BDDFunc {
+    pub fn max_sat(&mut self, funcs: &[BddFunc]) -> BddFunc {
         // First, construct an IDD function for each BDD function,
         // with value 1 if true and 0 if false. Then add these
-        // together to obtain a single IDD function whose value is the
+        // together to obtain a single Idd function whose value is the
         // number of satisfied (true) BDD functions.
-        let mut idd = LabelIDD::from_bdd(self);
+        let mut idd = LabelIdd::from_bdd(self);
         let idd_funcs: Vec<_> = funcs.iter().map(|f| idd.from_bdd_func(*f)).collect();
         let satisfied_count = idd_funcs
             .iter()
@@ -313,7 +313,7 @@ impl LabelBDD {
     }
 }
 
-/// A `BDD` is a Binary Decision Diagram, an efficient way to represent a
+/// A `Bdd` is a Binary Decision Diagram, an efficient way to represent a
 /// Boolean function in a canonical way. (It is actually a "Reduced Ordered
 /// Binary Decision Diagram", which gives it its canonicity assuming terminals
 /// are ordered consistently.)
@@ -325,40 +325,40 @@ impl LabelBDD {
 /// The major advantage of a BDD is that its logical operations are performed,
 /// it will "self-simplify": i.e., taking the OR of `And(a, b)` and `And(a,
 /// Not(b))` will produce `a` without any further simplification step. Furthermore,
-/// the `BDDFunc` representing this value is canonical: if two different
+/// the `BddFunc` representing this value is canonical: if two different
 /// expressions are produced within the same BDD and they both result in
-/// (simplify down to) `a`, then the `BDDFunc` values will be equal. The
+/// (simplify down to) `a`, then the `BddFunc` values will be equal. The
 /// tradeoff is that logical operations may be expensive: they are linear in
 /// BDD size, but BDDs may have exponential size (relative to terminal count)
 /// in the worst case.
 #[derive(Clone, Debug)]
-pub struct BDD<T>
+pub struct Bdd<T>
 where
     T: Clone + Debug + Eq + Hash,
 {
-    bdd: LabelBDD,
-    labels: HashMap<T, BDDLabel>,
+    bdd: LabelBdd,
+    labels: HashMap<T, BddLabel>,
     rev_labels: Vec<T>,
 }
 
-impl<T> BDD<T>
+impl<T> Bdd<T>
 where
     T: Clone + Debug + Eq + Hash,
 {
     /// Produce a new, empty, BDD.
-    pub fn new() -> BDD<T> {
-        BDD {
-            bdd: LabelBDD::new(),
+    pub fn new() -> Bdd<T> {
+        Bdd {
+            bdd: LabelBdd::new(),
             labels: HashMap::new(),
             rev_labels: Vec::new(),
         }
     }
 
-    fn label(&mut self, t: T) -> BDDLabel {
+    fn label(&mut self, t: T) -> BddLabel {
         match self.labels.entry(t.clone()) {
             HashEntry::Occupied(o) => *o.get(),
             HashEntry::Vacant(v) => {
-                let next_id = self.rev_labels.len() as BDDLabel;
+                let next_id = self.rev_labels.len() as BddLabel;
                 v.insert(next_id);
                 self.rev_labels.push(t);
                 next_id
@@ -367,55 +367,55 @@ where
     }
 
     /// Produce a function within the BDD representing the terminal `t`. If
-    /// this terminal has been used in the BDD before, the same `BDDFunc` will be
+    /// this terminal has been used in the BDD before, the same `BddFunc` will be
     /// returned.
-    pub fn terminal(&mut self, t: T) -> BDDFunc {
+    pub fn terminal(&mut self, t: T) -> BddFunc {
         let l = self.label(t);
         self.bdd.terminal(l)
     }
 
     /// Produce a function within the BDD representing the constant value `val`.
-    pub fn constant(&mut self, val: bool) -> BDDFunc {
+    pub fn constant(&mut self, val: bool) -> BddFunc {
         self.bdd.constant(val)
     }
 
     /// Produce a function within the BDD representing the logical if-then-else
     /// of the functions `i`, `t`, and `e`
-    pub fn ite(&mut self, i: BDDFunc, t: BDDFunc, e: BDDFunc) -> BDDFunc {
+    pub fn ite(&mut self, i: BddFunc, t: BddFunc, e: BddFunc) -> BddFunc {
         self.bdd.ite(i, t, e)
     }
 
     /// Produce a function within the BDD representing the logical complement
     /// of the function `n`.
-    pub fn not(&mut self, n: BDDFunc) -> BDDFunc {
+    pub fn not(&mut self, n: BddFunc) -> BddFunc {
         self.bdd.not(n)
     }
 
     /// Produce a function within the BDD representing the logical AND of the
     /// functions `a` and `b`.
-    pub fn and(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn and(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         self.bdd.and(a, b)
     }
 
     /// Produce a function within the BDD representing the logical OR of the
     /// functions `a` and `b`.
-    pub fn or(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn or(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         self.bdd.or(a, b)
     }
 
     /// Produce a function within the BDD representing the logical XOR of the
     /// functions `a` and `b`.
-    pub fn xor(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn xor(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         self.bdd.xor(a, b)
     }
 
     /// Produce a function within the BDD representing the logical implication `a` -> `b`.
-    pub fn implies(&mut self, a: BDDFunc, b: BDDFunc) -> BDDFunc {
+    pub fn implies(&mut self, a: BddFunc, b: BddFunc) -> BddFunc {
         self.bdd.implies(a, b)
     }
 
     /// Check whether the function `f` within the BDD is satisfiable.
-    pub fn sat(&self, f: BDDFunc) -> bool {
+    pub fn sat(&self, f: BddFunc) -> bool {
         match f {
             BDD_ZERO => false,
             _ => true,
@@ -423,13 +423,13 @@ where
     }
 
     /// Return a new function based on `f` but with the given label forced to the given value.
-    pub fn restrict(&mut self, f: BDDFunc, t: T, val: bool) -> BDDFunc {
+    pub fn restrict(&mut self, f: BddFunc, t: T, val: bool) -> BddFunc {
         self.bdd.restrict(f, self.labels[&t], val)
     }
 
     /// Produce a function within the BDD representing the given expression
     /// `e`, which may contain ANDs, ORs, NOTs, terminals, and constants.
-    pub fn from_expr(&mut self, e: &Expr<T>) -> BDDFunc {
+    pub fn from_expr(&mut self, e: &Expr<T>) -> BddFunc {
         match e {
             &Expr::Terminal(ref t) => self.terminal(t.clone()),
             &Expr::Const(val) => self.constant(val),
@@ -452,7 +452,7 @@ where
 
     /// Evaluate the function `f` in the BDD with the given terminal
     /// assignments. Any terminals not specified in `values` default to `false`.
-    pub fn evaluate(&self, f: BDDFunc, values: &HashMap<T, bool>) -> bool {
+    pub fn evaluate(&self, f: BddFunc, values: &HashMap<T, bool>) -> bool {
         let size = self.rev_labels.len();
         let mut valarray = Vec::with_capacity(size);
         valarray.resize(size, false);
@@ -471,7 +471,7 @@ where
     /// Example: for the boolean function "a or b", this function
     /// could return one of the following two HashMaps: {"a" -> true}
     /// or {"b" -> true}.
-    pub fn sat_one(&self, f: BDDFunc) -> Option<HashMap<T, bool>> {
+    pub fn sat_one(&self, f: BddFunc) -> Option<HashMap<T, bool>> {
         let mut h = HashMap::new();
         if self.sat_one_internal(f, &mut h) {
             Some(h)
@@ -480,7 +480,7 @@ where
         }
     }
 
-    fn sat_one_internal(&self, f: BDDFunc, assignments: &mut HashMap<T, bool>) -> bool {
+    fn sat_one_internal(&self, f: BddFunc, assignments: &mut HashMap<T, bool>) -> bool {
         match f {
             BDD_ZERO => false,
             BDD_ONE => true,
@@ -502,15 +502,15 @@ where
     }
 
     /// Convert the BDD to a minimized sum-of-products expression.
-    pub fn to_expr(&self, f: BDDFunc) -> Expr<T> {
+    pub fn to_expr(&self, f: BddFunc) -> Expr<T> {
         self.bdd
             .to_expr(f, self.rev_labels.len())
-            .map(|t: &BDDLabel| self.rev_labels[*t as usize].clone())
+            .map(|t: &BddLabel| self.rev_labels[*t as usize].clone())
     }
 
     /// Export BDD to `dot` format (from the graphviz package) to enable visualization.
-    pub fn to_dot(&self, f: BDDFunc) -> String {
-        // the algorithm starts at the f BDDfunction and then recursively collects all BDDNodes
+    pub fn to_dot(&self, f: BddFunc) -> String {
+        // the algorithm starts at the f Bddfunction and then recursively collects all BddNodes
         // until BDD_ZERO and BDD_ONE. The output for each node is straightforward: just a single
         // `dot` node.
         let mut out = String::from("digraph bdd {\n");
@@ -541,7 +541,7 @@ where
 
     /// Produce an ordered set of nodes in the BDD function `f`: the transitive closure of
     /// reachable nodes.
-    fn reachable_nodes(&self, f: BDDFunc, s: &mut BTreeSet<BDDFunc>) {
+    fn reachable_nodes(&self, f: BddFunc, s: &mut BTreeSet<BddFunc>) {
         if f != BDD_ZERO && f != BDD_ONE {
             // we use a BTreeSet instead of a HashSet since its order is stable.
             if s.insert(f) {
@@ -553,7 +553,7 @@ where
 
     /// Produce a function that is true when the maximal number of
     /// given input functions are true.
-    pub fn max_sat(&mut self, funcs: &[BDDFunc]) -> BDDFunc {
+    pub fn max_sat(&mut self, funcs: &[BddFunc]) -> BddFunc {
         self.bdd.max_sat(funcs)
     }
 
@@ -563,61 +563,61 @@ where
     }
 }
 
-/// The `BDDOutput` trait provides an interface to inform a listener about new
+/// The `BddOutput` trait provides an interface to inform a listener about new
 /// BDD nodes that are created. It allows the user to persist a BDD to a stream
 /// (e.g., a log or trace file) as a long-running process executes. A
-/// `BDDOutput` instance may be provided to all BDD operations.
-pub trait BDDOutput<T, E> {
+/// `BddOutput` instance may be provided to all BDD operations.
+pub trait BddOutput<T, E> {
     fn write_label(&self, label: T, label_id: u64) -> Result<(), E>;
     fn write_node(
         &self,
-        node_id: BDDFunc,
+        node_id: BddFunc,
         label_id: u64,
-        lo: BDDFunc,
-        hi: BDDFunc,
+        lo: BddFunc,
+        hi: BddFunc,
     ) -> Result<(), E>;
 }
 
-/// A `PersistedBDD` is a wrapper around a `BDD` that provides a means to write
-/// BDD labels and nodes out to a `BDDOutput`. It tracks how much of the BDD
+/// A `PersistedBdd` is a wrapper around a `Bdd` that provides a means to write
+/// BDD labels and nodes out to a `BddOutput`. It tracks how much of the BDD
 /// has already been writen out, and writes out new nodes and labels as
 /// required when its `persist()` or `persist_all()` method is called.
-pub struct PersistedBDD<T>
+pub struct PersistedBdd<T>
 where
     T: Clone + Debug + Eq + Hash,
 {
-    bdd: BDD<T>,
-    next_output_func: BDDFunc,
-    next_output_label: BDDLabel,
+    bdd: Bdd<T>,
+    next_output_func: BddFunc,
+    next_output_label: BddLabel,
 }
 
-impl<T> PersistedBDD<T>
+impl<T> PersistedBdd<T>
 where
     T: Clone + Debug + Eq + Hash,
 {
-    /// Create a new `PersistedBDD`.
-    pub fn new() -> PersistedBDD<T> {
-        PersistedBDD {
-            bdd: BDD::new(),
+    /// Create a new `PersistedBdd`.
+    pub fn new() -> PersistedBdd<T> {
+        PersistedBdd {
+            bdd: Bdd::new(),
             next_output_func: 0,
             next_output_label: 0,
         }
     }
 
     /// Return the inner BDD.
-    pub fn bdd(&self) -> &BDD<T> {
+    pub fn bdd(&self) -> &Bdd<T> {
         &self.bdd
     }
 
     /// Return the inner BDD.
-    pub fn bdd_mut(&mut self) -> &mut BDD<T> {
+    pub fn bdd_mut(&mut self) -> &mut Bdd<T> {
         &mut self.bdd
     }
 
     /// Persist (at least) all labels and nodes in the BDD necessary to fully
     /// describe BDD function `f`. More records than strictly necessary may be
     /// written out.
-    pub fn persist<E>(&mut self, f: BDDFunc, out: &dyn BDDOutput<T, E>) -> Result<(), E> {
+    pub fn persist<E>(&mut self, f: BddFunc, out: &dyn BddOutput<T, E>) -> Result<(), E> {
         if f == BDD_ZERO || f == BDD_ONE {
             // No need to persist the terminal constant nodes!
             return Ok(());
@@ -638,7 +638,7 @@ where
     }
 
     /// Persist all labels and nodes in the BDD.
-    pub fn persist_all<E>(&mut self, out: &dyn BDDOutput<T, E>) -> Result<(), E> {
+    pub fn persist_all<E>(&mut self, out: &dyn BddOutput<T, E>) -> Result<(), E> {
         if self.bdd.bdd.nodes.len() > 0 {
             let last_f = self.bdd.bdd.nodes.len() - 1;
             self.persist(last_f, out)
@@ -648,47 +648,47 @@ where
     }
 }
 
-/// A `BDDLoader` provides a way to inject BDD nodes directly, as they were
-/// previously dumped by a `PersistedBDD` to a `BDDOutput`. The user should
-/// create a `BDDLoader` instance wrapped around a `BDD` and call
+/// A `BddLoader` provides a way to inject BDD nodes directly, as they were
+/// previously dumped by a `PersistedBdd` to a `BddOutput`. The user should
+/// create a `BddLoader` instance wrapped around a `Bdd` and call
 /// `inject_label` and `inject_node` as appropriate to inject labels and nodes.
-pub struct BDDLoader<'a, T>
+pub struct BddLoader<'a, T>
 where
     T: Clone + Debug + Eq + Hash + 'a,
 {
-    bdd: &'a mut BDD<T>,
+    bdd: &'a mut Bdd<T>,
 }
 
-impl<'a, T> BDDLoader<'a, T>
+impl<'a, T> BddLoader<'a, T>
 where
     T: Clone + Debug + Eq + Hash + 'a,
 {
-    /// Create a new `BDDLoader` wrapping the given `bdd`. The `BDDLoader`
+    /// Create a new `BddLoader` wrapping the given `Bdd`. The `BddLoader`
     /// holds a mutable reference to `bdd` until destroyed. `bdd` must be empty
     /// initially.
-    pub fn new(bdd: &'a mut BDD<T>) -> BDDLoader<'a, T> {
+    pub fn new(bdd: &'a mut Bdd<T>) -> BddLoader<'a, T> {
         assert!(bdd.labels.len() == 0);
         assert!(bdd.rev_labels.len() == 0);
         assert!(bdd.bdd.nodes.len() == 0);
-        BDDLoader { bdd: bdd }
+        BddLoader { bdd: bdd }
     }
 
     /// Inject a new label into the BDD. The `id` must be the next consecutive
     /// `id`; i.e., labels must be injected in the order they were dumped to a
-    /// `BDDOutput`.
+    /// `BddOutput`.
     pub fn inject_label(&mut self, t: T, id: u64) {
         assert!(id == self.bdd.rev_labels.len() as u64);
         self.bdd.rev_labels.push(t.clone());
-        self.bdd.labels.insert(t, id as BDDLabel);
+        self.bdd.labels.insert(t, id as BddLabel);
     }
 
     /// Inject a new node into the BDD. The `id` must be the next consecutive
     /// `id`; i.e., nodes must be injected in the order they were dumped to a
-    /// `BDDOutput`.
-    pub fn inject_node(&mut self, id: BDDFunc, label_id: u64, lo: BDDFunc, hi: BDDFunc) {
-        assert!(id == self.bdd.bdd.nodes.len() as BDDFunc);
-        let n = BDDNode {
-            label: label_id as BDDLabel,
+    /// `BddOutput`.
+    pub fn inject_node(&mut self, id: BddFunc, label_id: u64, lo: BddFunc, hi: BddFunc) {
+        assert!(id == self.bdd.bdd.nodes.len() as BddFunc);
+        let n = BddNode {
+            label: label_id as BddLabel,
             lo: lo,
             hi: hi,
             varcount: cmp::min(
@@ -720,8 +720,8 @@ mod test {
     }
 
     fn test_bdd(
-        b: &BDD<u32>,
-        f: BDDFunc,
+        b: &Bdd<u32>,
+        f: BddFunc,
         h: &mut HashMap<u32, bool>,
         inputs: &[bool],
         expected: bool,
@@ -733,7 +733,7 @@ mod test {
     #[test]
     fn bdd_eval() {
         let mut h = HashMap::new();
-        let mut b = BDD::new();
+        let mut b = Bdd::new();
         let expr = Expr::or(
             Expr::and(Expr::Terminal(0), Expr::Terminal(1)),
             Expr::and(Expr::not(Expr::Terminal(2)), Expr::not(Expr::Terminal(3))),
@@ -753,7 +753,7 @@ mod test {
     }
 
     fn test_bdd_expr(e: Expr<u32>, nterminals: usize) {
-        let mut b = BDD::new();
+        let mut b = Bdd::new();
         let f = b.from_expr(&e);
         let mut terminal_values = HashMap::new();
         let mut expected_satisfiable = false;
@@ -802,7 +802,7 @@ mod test {
 
     #[test]
     fn bdd_to_expr() {
-        let mut b = BDD::new();
+        let mut b = Bdd::new();
         let f_true = b.constant(true);
         assert!(b.to_expr(f_true) == Expr::Const(true));
         let f_false = b.constant(false);
@@ -828,21 +828,21 @@ mod test {
     }
 
     #[derive(Clone, Debug)]
-    struct InMemoryBDDLog {
+    struct InMemoryBddLog {
         labels: RefCell<Vec<(u64, String)>>,
-        nodes: RefCell<Vec<(BDDFunc, u64, BDDFunc, BDDFunc)>>,
+        nodes: RefCell<Vec<(BddFunc, u64, BddFunc, BddFunc)>>,
     }
 
-    impl InMemoryBDDLog {
-        pub fn new() -> InMemoryBDDLog {
-            InMemoryBDDLog {
+    impl InMemoryBddLog {
+        pub fn new() -> InMemoryBddLog {
+            InMemoryBddLog {
                 labels: RefCell::new(Vec::new()),
                 nodes: RefCell::new(Vec::new()),
             }
         }
     }
 
-    impl BDDOutput<String, ()> for InMemoryBDDLog {
+    impl BddOutput<String, ()> for InMemoryBddLog {
         fn write_label(&self, l: String, label_id: u64) -> Result<(), ()> {
             let mut labels = self.labels.borrow_mut();
             labels.push((label_id, l));
@@ -851,10 +851,10 @@ mod test {
 
         fn write_node(
             &self,
-            node_id: BDDFunc,
+            node_id: BddFunc,
             label_id: u64,
-            lo: BDDFunc,
-            hi: BDDFunc,
+            lo: BddFunc,
+            hi: BddFunc,
         ) -> Result<(), ()> {
             let mut nodes = self.nodes.borrow_mut();
             nodes.push((node_id, label_id, lo, hi));
@@ -865,7 +865,7 @@ mod test {
     #[test]
     // the tests compare the dot output to a string which has been manually verified to be correct
     fn dot_output() {
-        let mut bdd = BDD::new();
+        let mut bdd = Bdd::new();
         let a = bdd.terminal("a");
         let b = bdd.terminal("b");
         let b_and_a = bdd.and(a, b);
@@ -959,9 +959,9 @@ mod test {
 
     #[test]
     fn sat_one() {
-        let mut bdd = BDD::new();
+        let mut bdd = Bdd::new();
 
-        // empty bdds
+        // empty BDDs
         assert!(bdd.sat_one(BDD_ONE).is_some());
         assert!(bdd.sat_one(BDD_ZERO).is_none());
 
@@ -986,7 +986,7 @@ mod test {
 
     #[test]
     fn max_sat() {
-        let mut bdd = BDD::new();
+        let mut bdd = Bdd::new();
         // Test: a, a+b, a+c, c', c, bd, ad, d'
         let a = bdd.terminal(0);
         let b = bdd.terminal(1);
@@ -1006,7 +1006,7 @@ mod test {
 
     #[test]
     fn max_sat_min_var() {
-        let mut bdd = BDD::new();
+        let mut bdd = Bdd::new();
         // Test: a, a+b, a+c, c', c, bd, d'
         let a = bdd.terminal(0);
         let b = bdd.terminal(1);
@@ -1029,8 +1029,8 @@ mod test {
 
     #[test]
     fn persist_bdd() {
-        let out = InMemoryBDDLog::new();
-        let mut p = PersistedBDD::new();
+        let out = InMemoryBddLog::new();
+        let mut p = PersistedBdd::new();
         let term_a = p.bdd_mut().terminal("A".to_owned());
         let term_b = p.bdd_mut().terminal("B".to_owned());
         let term_c = p.bdd_mut().terminal("C".to_owned());
@@ -1060,9 +1060,9 @@ mod test {
 
     #[test]
     fn load_bdd() {
-        let mut bdd = BDD::new();
+        let mut bdd = Bdd::new();
         {
-            let mut loader = BDDLoader::new(&mut bdd);
+            let mut loader = BddLoader::new(&mut bdd);
             loader.inject_label("A".to_owned(), 0);
             loader.inject_label("B".to_owned(), 1);
             loader.inject_node(0, 1, BDD_ZERO, BDD_ONE);
@@ -1076,8 +1076,8 @@ mod test {
 
     #[test]
     fn persist_empty_bdd() {
-        let out = InMemoryBDDLog::new();
-        let mut p = PersistedBDD::new();
+        let out = InMemoryBddLog::new();
+        let mut p = PersistedBdd::new();
         p.persist(BDD_ZERO, &out).unwrap();
     }
 }

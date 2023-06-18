@@ -9,7 +9,7 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use Expr;
-use BDD;
+use Bdd;
 
 struct SimplifyContext<T> {
     changed: bool,
@@ -121,12 +121,12 @@ where
 }
 
 // This expression simplification path is tested via the tests for
-// `BDD::from_expr` and `BDD::to_expr`, so we don't replicate those tests here.
+// `Bdd::from_expr` and `Bdd::to_expr`, so we don't replicate those tests here.
 pub fn simplify_via_bdd<T>(e: Expr<T>) -> Expr<T>
 where
     T: Clone + Debug + Eq + Hash,
 {
-    let mut bdd = BDD::new();
+    let mut bdd = Bdd::new();
     let f = bdd.from_expr(&e);
     bdd.to_expr(f)
 }

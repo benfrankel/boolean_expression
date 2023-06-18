@@ -210,7 +210,7 @@ where
         simplify::simplify_via_laws(self)
     }
 
-    /// Simplify an expression via a roundtrip through a `BDD`. This procedure
+    /// Simplify an expression via a roundtrip through a `Bdd`. This procedure
     /// is more effective than `Expr::simplify_via_laws()`, but more expensive.
     /// This roundtrip will implicitly simplify an arbitrarily complicated
     /// function (by construction, as the BDD is built), and then find a

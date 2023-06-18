@@ -149,7 +149,7 @@ const CUBELIST_ALLOCED_SIZE: usize = 4;
 /// (variable 0, 1, ...), and does not (yet) have a wrapper supporting an
 /// arbitrary terminal type `T`. This may be implemented in the future.
 ///
-/// The `CubeList` abstraction is used internally to convert from a `BDD`
+/// The `CubeList` abstraction is used internally to convert from a `Bdd`
 /// to a quasi-minimized Boolean expression.
 #[derive(Clone, Debug)]
 pub struct CubeList(SmallVec<[Cube; CUBE_ALLOCED_SIZE]>);

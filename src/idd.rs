@@ -8,41 +8,41 @@ use std::collections::hash_map::Entry as HashEntry;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use {BDDFunc, BDDLabel, LabelBDD, BDD_ONE, BDD_ZERO};
+use {BddFunc, BddLabel, LabelBdd, BDD_ONE, BDD_ZERO};
 
 #[derive(Clone, Debug, Hash, PartialOrd, Ord, PartialEq, Eq)]
-pub(crate) enum IDDFunc {
+pub(crate) enum IddFunc {
     Const(isize),
     Node(usize),
 }
 
 #[derive(Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
-pub(crate) struct IDDNode {
-    label: BDDLabel,
-    lo: IDDFunc,
-    hi: IDDFunc,
+pub(crate) struct IddNode {
+    label: BddLabel,
+    lo: IddFunc,
+    hi: IddFunc,
     max: isize,
 }
 
-impl fmt::Debug for IDDNode {
+impl fmt::Debug for IddNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "IDDNode(label = {}, lo = {:?}, hi = {:?}, max = {})",
+            "IddNode(label = {}, lo = {:?}, hi = {:?}, max = {})",
             self.label, self.lo, self.hi, self.max
         )
     }
 }
 
 #[derive(Clone)]
-pub(crate) struct LabelIDD {
-    nodes: Vec<IDDNode>,
-    dedup_hash: HashMap<IDDNode, usize>,
+pub(crate) struct LabelIdd {
+    nodes: Vec<IddNode>,
+    dedup_hash: HashMap<IddNode, usize>,
 }
 
-impl fmt::Debug for LabelIDD {
+impl fmt::Debug for LabelIdd {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "LabelIDD:")?;
+        writeln!(f, "LabelIdd:")?;
         for (idx, node) in self.nodes.iter().enumerate() {
             writeln!(f, "  node {}: {:?}", idx, node)?;
         }
@@ -50,10 +50,10 @@ impl fmt::Debug for LabelIDD {
     }
 }
 
-impl IDDFunc {
+impl IddFunc {
     pub fn as_const(&self) -> Option<isize> {
         match self {
-            &IDDFunc::Const(i) => Some(i),
+            &IddFunc::Const(i) => Some(i),
             _ => None,
         }
     }
@@ -62,7 +62,7 @@ impl IDDFunc {
     }
     pub fn as_node_idx(&self) -> Option<usize> {
         match self {
-            &IDDFunc::Node(i) => Some(i),
+            &IddFunc::Node(i) => Some(i),
             _ => None,
         }
     }
@@ -71,21 +71,21 @@ impl IDDFunc {
     }
 }
 
-impl LabelIDD {
-    pub fn new() -> LabelIDD {
-        LabelIDD {
+impl LabelIdd {
+    pub fn new() -> LabelIdd {
+        LabelIdd {
             nodes: Vec::new(),
             dedup_hash: HashMap::new(),
         }
     }
 
-    pub(crate) fn from_bdd(bdd: &LabelBDD) -> LabelIDD {
-        let mut l = LabelIDD::new();
+    pub(crate) fn from_bdd(bdd: &LabelBdd) -> LabelIdd {
+        let mut l = LabelIdd::new();
         for n in &bdd.nodes {
             let lo = l.from_bdd_func(n.lo);
             let hi = l.from_bdd_func(n.hi);
             let label = n.label;
-            let n = IDDNode {
+            let n = IddNode {
                 label: label,
                 lo: lo.clone(),
                 hi: hi.clone(),
@@ -98,46 +98,46 @@ impl LabelIDD {
         l
     }
 
-    pub(crate) fn from_bdd_func(&self, f: BDDFunc) -> IDDFunc {
+    pub(crate) fn from_bdd_func(&self, f: BddFunc) -> IddFunc {
         if f == BDD_ZERO {
-            IDDFunc::Const(0)
+            IddFunc::Const(0)
         } else if f == BDD_ONE {
-            IDDFunc::Const(1)
+            IddFunc::Const(1)
         } else {
-            IDDFunc::Node(f)
+            IddFunc::Node(f)
         }
     }
 
-    fn get_node(&mut self, label: BDDLabel, lo: IDDFunc, hi: IDDFunc) -> IDDFunc {
+    fn get_node(&mut self, label: BddLabel, lo: IddFunc, hi: IddFunc) -> IddFunc {
         if lo == hi {
             return lo;
         }
-        let n = IDDNode {
+        let n = IddNode {
             label: label,
             lo: lo.clone(),
             hi: hi.clone(),
             max: cmp::max(self.max_value(lo.clone()), self.max_value(hi.clone())),
         };
         match self.dedup_hash.entry(n.clone()) {
-            HashEntry::Occupied(o) => IDDFunc::Node(*o.get()),
+            HashEntry::Occupied(o) => IddFunc::Node(*o.get()),
             HashEntry::Vacant(v) => {
                 let f = self.nodes.len();
                 self.nodes.push(n);
                 v.insert(f.clone());
-                IDDFunc::Node(f)
+                IddFunc::Node(f)
             }
         }
     }
 
-    pub fn terminal(&mut self, label: BDDLabel, lo_val: isize, hi_val: isize) -> IDDFunc {
-        self.get_node(label, IDDFunc::Const(lo_val), IDDFunc::Const(hi_val))
+    pub fn terminal(&mut self, label: BddLabel, lo_val: isize, hi_val: isize) -> IddFunc {
+        self.get_node(label, IddFunc::Const(lo_val), IddFunc::Const(hi_val))
     }
 
-    pub fn constant(&mut self, i: isize) -> IDDFunc {
-        IDDFunc::Const(i)
+    pub fn constant(&mut self, i: isize) -> IddFunc {
+        IddFunc::Const(i)
     }
 
-    fn arith_op<F>(&mut self, a: IDDFunc, b: IDDFunc, f: &F) -> IDDFunc
+    fn arith_op<F>(&mut self, a: IddFunc, b: IddFunc, f: &F) -> IddFunc
     where
         F: Fn(isize, isize) -> isize,
     {
@@ -174,23 +174,23 @@ impl LabelIDD {
         }
     }
 
-    pub fn add(&mut self, a: IDDFunc, b: IDDFunc) -> IDDFunc {
+    pub fn add(&mut self, a: IddFunc, b: IddFunc) -> IddFunc {
         self.arith_op(a, b, &|aconst, bconst| aconst + bconst)
     }
 
-    pub fn sub(&mut self, a: IDDFunc, b: IDDFunc) -> IDDFunc {
+    pub fn sub(&mut self, a: IddFunc, b: IddFunc) -> IddFunc {
         self.arith_op(a, b, &|aconst, bconst| aconst - bconst)
     }
 
-    pub fn min(&mut self, a: IDDFunc, b: IDDFunc) -> IDDFunc {
+    pub fn min(&mut self, a: IddFunc, b: IddFunc) -> IddFunc {
         self.arith_op(a, b, &|aconst, bconst| cmp::min(aconst, bconst))
     }
 
-    pub fn max(&mut self, a: IDDFunc, b: IDDFunc) -> IDDFunc {
+    pub fn max(&mut self, a: IddFunc, b: IddFunc) -> IddFunc {
         self.arith_op(a, b, &|aconst, bconst| cmp::max(aconst, bconst))
     }
 
-    pub fn eq(&self, a: IDDFunc, b: IDDFunc, bdd: &mut LabelBDD) -> BDDFunc {
+    pub fn eq(&self, a: IddFunc, b: IddFunc, bdd: &mut LabelBdd) -> BddFunc {
         if a.is_const() && b.is_const() {
             if a.as_const().unwrap() == b.as_const().unwrap() {
                 BDD_ONE
@@ -208,7 +208,7 @@ impl LabelIDD {
         }
     }
 
-    pub fn evaluate(&self, func: IDDFunc, inputs: &[bool]) -> Option<isize> {
+    pub fn evaluate(&self, func: IddFunc, inputs: &[bool]) -> Option<isize> {
         if func.is_const() {
             return Some(func.as_const().unwrap());
         }
@@ -232,10 +232,10 @@ impl LabelIDD {
         f.as_const()
     }
 
-    pub fn max_value(&self, f: IDDFunc) -> isize {
+    pub fn max_value(&self, f: IddFunc) -> isize {
         match f {
-            IDDFunc::Const(i) => i,
-            IDDFunc::Node(idx) => self.nodes[idx].max,
+            IddFunc::Const(i) => i,
+            IddFunc::Node(idx) => self.nodes[idx].max,
         }
     }
 }
@@ -246,7 +246,7 @@ mod test {
 
     #[test]
     fn test_idd_const() {
-        let mut idd = LabelIDD::new();
+        let mut idd = LabelIdd::new();
         let c0 = idd.constant(0);
         let c1 = idd.constant(1);
         let c2 = idd.constant(2);
@@ -268,7 +268,7 @@ mod test {
 
     #[test]
     fn test_idd_term() {
-        let mut idd = LabelIDD::new();
+        let mut idd = LabelIdd::new();
         let x0 = idd.terminal(0, 10, 20);
         let x1 = idd.terminal(1, 35, 40);
         let x2 = idd.add(x0.clone(), x1.clone());
@@ -302,13 +302,13 @@ mod test {
 
     #[test]
     fn test_idd_from_bdd() {
-        let mut bdd = LabelBDD::new();
+        let mut bdd = LabelBdd::new();
         let x0_bdd = bdd.terminal(0);
         let x1_bdd = bdd.terminal(1);
         let x2_bdd = bdd.and(x0_bdd, x1_bdd);
         let x3_bdd = bdd.not(x1_bdd);
         let x4_bdd = bdd.or(x2_bdd, x3_bdd);
-        let idd = LabelIDD::from_bdd(&bdd);
+        let idd = LabelIdd::from_bdd(&bdd);
         assert!(idd.evaluate(idd.from_bdd_func(x4_bdd), &[true, false]) == Some(1));
         assert!(idd.evaluate(idd.from_bdd_func(x4_bdd), &[false, false]) == Some(1));
         assert!(idd.evaluate(idd.from_bdd_func(x4_bdd), &[false, true]) == Some(0));
@@ -316,7 +316,7 @@ mod test {
 
     #[test]
     fn test_idd_max_value() {
-        let mut idd = LabelIDD::new();
+        let mut idd = LabelIdd::new();
         let x0 = idd.terminal(0, 10, 20);
         let x1 = idd.terminal(1, 35, 40);
         let x2 = idd.add(x0.clone(), x1.clone());
@@ -333,12 +333,12 @@ mod test {
 
     #[test]
     fn test_idd_eq() {
-        let mut idd = LabelIDD::new();
+        let mut idd = LabelIdd::new();
         let x0 = idd.terminal(0, 10, 20);
         let x1 = idd.terminal(1, 35, 40);
         let x2 = idd.add(x0.clone(), x1.clone());
         let x3 = idd.min(x0.clone(), x1.clone());
-        let mut bdd = LabelBDD::new();
+        let mut bdd = LabelBdd::new();
         let eq0 = idd.eq(x3.clone(), x0.clone(), &mut bdd);
         assert!(eq0 == BDD_ONE);
         let const45 = idd.constant(45);
