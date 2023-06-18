@@ -6,10 +6,11 @@
 
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::hash_map::Entry as HashEntry;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
+
+use hashbrown::hash_map::Entry as HashEntry;
+use hashbrown::HashMap;
+use hashbrown::HashSet;
 
 use crate::BddFunc;
 use crate::BddLabel;

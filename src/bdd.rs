@@ -6,16 +6,16 @@
 
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::hash_map::Entry as HashEntry;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 
 #[cfg(feature = "bevy_reflect")]
 use bevy_reflect_derive::{FromReflect, Reflect};
+use hashbrown::hash_map::Entry as HashEntry;
+use hashbrown::HashMap;
+use hashbrown::HashSet;
 use itertools::Itertools;
 
 use crate::cubes::Cube;
@@ -736,7 +736,6 @@ impl<'a, T: Eq + Hash + Clone> BddLoader<'a, T> {
 #[cfg(test)]
 mod test {
     use std::cell::RefCell;
-    use std::collections::HashMap;
 
     use indoc::indoc;
     use rand::Rng;

@@ -18,6 +18,7 @@ bevy_reflect = [
 [dependencies]
 bevy_reflect = { version = "0.10", optional = true }
 bevy_reflect_derive = { version = "0.10", optional = true }
+hashbrown = { version = "0.12", features = ["serde"] }
 smallvec = "1"
 itertools = "0.10"
 

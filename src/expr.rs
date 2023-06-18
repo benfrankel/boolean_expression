@@ -5,7 +5,6 @@
 //
 
 use std::cmp::Ord;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::BitAnd;
@@ -18,6 +17,7 @@ use std::ops::Not;
 
 #[cfg(feature = "bevy_reflect")]
 use bevy_reflect_derive::{FromReflect, Reflect};
+use hashbrown::HashMap;
 
 use crate::simplify;
 
