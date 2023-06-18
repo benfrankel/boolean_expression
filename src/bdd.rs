@@ -120,17 +120,17 @@ impl LabelBdd {
             &Expr::Terminal(t) => self.terminal(t),
             &Expr::Const(val) => self.constant(val),
             Expr::Not(x) => {
-                let xval = self.from_expr(&*x);
+                let xval = self.from_expr(x);
                 self.not(xval)
             }
             Expr::And(a, b) => {
-                let aval = self.from_expr(&*a);
-                let bval = self.from_expr(&*b);
+                let aval = self.from_expr(a);
+                let bval = self.from_expr(b);
                 self.and(aval, bval)
             }
             Expr::Or(a, b) => {
-                let aval = self.from_expr(&*a);
-                let bval = self.from_expr(&*b);
+                let aval = self.from_expr(a);
+                let bval = self.from_expr(b);
                 self.or(aval, bval)
             }
         }
@@ -575,17 +575,17 @@ impl<T: Eq + Hash + Clone> Bdd<T> {
             Expr::Terminal(t) => self.terminal(t.clone()),
             &Expr::Const(val) => self.constant(val),
             Expr::Not(x) => {
-                let xval = self.from_expr(&*x);
+                let xval = self.from_expr(x);
                 self.not(xval)
             }
             Expr::And(a, b) => {
-                let aval = self.from_expr(&*a);
-                let bval = self.from_expr(&*b);
+                let aval = self.from_expr(a);
+                let bval = self.from_expr(b);
                 self.and(aval, bval)
             }
             Expr::Or(a, b) => {
-                let aval = self.from_expr(&*a);
-                let bval = self.from_expr(&*b);
+                let aval = self.from_expr(a);
+                let bval = self.from_expr(b);
                 self.or(aval, bval)
             }
         }
