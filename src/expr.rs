@@ -85,12 +85,6 @@ impl<T> Expr<T> {
         matches!(self, Self::Or(..))
     }
 
-    /// Builds a NOT node around an argument, consuming the argument
-    /// expression.
-    pub fn not(self) -> Self {
-        Self::Not(Box::new(self))
-    }
-
     /// Builds an AND node around two arguments, consuming the argument
     /// expressions.
     pub fn and(self, rhs: Self) -> Self {
@@ -129,10 +123,10 @@ impl<T> Expr<T> {
     {
         match self {
             Self::Terminal(t) => f(t),
-            Self::Const(val) => *val,
+            &Self::Const(val) => val,
+            Self::Not(x) => !x.evaluate_with_helper(f),
             Self::And(a, b) => a.evaluate_with_helper(f) && b.evaluate_with_helper(f),
             Self::Or(a, b) => a.evaluate_with_helper(f) || b.evaluate_with_helper(f),
-            Self::Not(x) => !x.evaluate_with_helper(f),
         }
     }
 
@@ -149,11 +143,11 @@ impl<T> Expr<T> {
         F: Copy + Fn(&T) -> R,
     {
         match self {
-            &Self::Terminal(ref t) => Expr::Terminal(f(t)),
+            Self::Terminal(t) => Expr::Terminal(f(t)),
             &Self::Const(val) => Expr::Const(val),
-            &Self::Not(ref n) => Expr::not(n.map_helper(f)),
-            &Self::And(ref a, ref b) => Expr::and(a.map_helper(f), b.map_helper(f)),
-            &Self::Or(ref a, ref b) => Expr::or(a.map_helper(f), b.map_helper(f)),
+            Self::Not(n) => !n.map_helper(f),
+            Self::And(a, b) => Expr::and(a.map_helper(f), b.map_helper(f)),
+            Self::Or(a, b) => Expr::or(a.map_helper(f), b.map_helper(f)),
         }
     }
 }
@@ -189,16 +183,18 @@ impl<T: PartialEq + Clone> Expr<T> {
     /// use boolean_expression::Expr;
     ///
     /// // This simplifies using DeMorgan's Law:
-    /// let expr = Expr::not(Expr::or(Expr::Terminal(0), Expr::Terminal(1)));
+    /// let expr = !Expr::or(Expr::Terminal(0), Expr::Terminal(1));
     /// let simplified = expr.simplify_via_laws();
-    /// assert_eq!(simplified,
-    ///     Expr::and(Expr::not(Expr::Terminal(0)),
-    ///               Expr::not(Expr::Terminal(1))));
+    /// assert_eq!(
+    ///     simplified,
+    ///     Expr::and(!Expr::Terminal(0), !Expr::Terminal(1)),
+    /// );
     ///
     /// // This doesn't simplify, though:
     /// let expr = Expr::or(
-    ///             Expr::and(Expr::Terminal(0), Expr::Terminal(1)),
-    ///             Expr::and(Expr::Terminal(0), Expr::not(Expr::Terminal(1))));
+    ///     Expr::and(Expr::Terminal(0), Expr::Terminal(1)),
+    ///     Expr::and(Expr::Terminal(0), !Expr::Terminal(1)),
+    /// );
     /// let simplified = expr.clone().simplify_via_laws();
     /// assert_eq!(simplified, expr);
     /// ```
@@ -214,11 +210,11 @@ impl<T: Eq + Hash> Expr<T> {
     /// If any terminals are not assigned, they default to `false`.
     pub fn evaluate(&self, vals: &HashMap<T, bool>) -> bool {
         match self {
-            &Self::Terminal(ref t) => *vals.get(t).unwrap_or(&false),
+            Self::Terminal(t) => *vals.get(t).unwrap_or(&false),
             &Self::Const(val) => val,
-            &Self::And(ref a, ref b) => a.evaluate(vals) && b.evaluate(vals),
-            &Self::Or(ref a, ref b) => a.evaluate(vals) || b.evaluate(vals),
-            &Self::Not(ref x) => !x.evaluate(vals),
+            Self::Not(x) => !x.evaluate(vals),
+            Self::And(a, b) => a.evaluate(vals) && b.evaluate(vals),
+            Self::Or(a, b) => a.evaluate(vals) || b.evaluate(vals),
         }
     }
 }
@@ -236,8 +232,9 @@ impl<T: Eq + Hash + Clone> Expr<T> {
     /// // `simplify_via_laws()` cannot combine these terms, but
     /// // `simplify_via_bdd()` will:
     /// let expr = Expr::or(
-    ///             Expr::and(Expr::Terminal(0), Expr::Terminal(1)),
-    ///             Expr::and(Expr::Terminal(0), Expr::not(Expr::Terminal(1))));
+    ///     Expr::and(Expr::Terminal(0), Expr::Terminal(1)),
+    ///     Expr::and(Expr::Terminal(0), !Expr::Terminal(1)),
+    /// );
     /// let simplified = expr.simplify_via_bdd();
     /// assert_eq!(simplified, Expr::Terminal(0));
     /// ```
@@ -249,8 +246,10 @@ impl<T: Eq + Hash + Clone> Expr<T> {
 impl<T> Not for Expr<T> {
     type Output = Self;
 
+    /// Builds a NOT node around an argument, consuming the argument
+    /// expression.
     fn not(self) -> Self::Output {
-        self.not()
+        Self::Not(Box::new(self))
     }
 }
 

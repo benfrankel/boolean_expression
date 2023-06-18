@@ -134,8 +134,6 @@ mod test {
     use std::fmt::Debug;
     use std::hash::Hash;
 
-    use Expr;
-
     use super::*;
 
     fn run_test<T: PartialEq + Clone + Debug>(orig: Expr<T>, expected: Expr<T>) {
@@ -170,16 +168,16 @@ mod test {
     #[test]
     fn demorgan_and() {
         run_test(
-            Expr::not(Expr::or(Expr::Terminal(1), Expr::Terminal(2))),
-            Expr::and(Expr::not(Expr::Terminal(1)), Expr::not(Expr::Terminal(2))),
+            !Expr::or(Expr::Terminal(1), Expr::Terminal(2)),
+            Expr::and(!Expr::Terminal(1), !Expr::Terminal(2)),
         );
     }
 
     #[test]
     fn demorgan_or() {
         run_test(
-            Expr::not(Expr::or(Expr::Terminal(1), Expr::Terminal(2))),
-            Expr::and(Expr::not(Expr::Terminal(1)), Expr::not(Expr::Terminal(2))),
+            !Expr::or(Expr::Terminal(1), Expr::Terminal(2)),
+            Expr::and(!Expr::Terminal(1), !Expr::Terminal(2)),
         );
     }
 

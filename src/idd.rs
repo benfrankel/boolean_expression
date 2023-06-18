@@ -5,6 +5,7 @@
 //
 
 use std::cmp;
+use std::cmp::Ordering;
 use std::collections::hash_map::Entry as HashEntry;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -122,16 +123,16 @@ impl LabelIdd {
             label,
             lo: lo.clone(),
             hi: hi.clone(),
-            max: cmp::max(self.max_value(lo.clone()), self.max_value(hi.clone())),
+            max: cmp::max(self.max_value(lo), self.max_value(hi)),
         };
         match self.dedup_hash.entry(n.clone()) {
             HashEntry::Occupied(o) => IddFunc::Node(*o.get()),
             HashEntry::Vacant(v) => {
                 let f = self.nodes.len();
                 self.nodes.push(n);
-                v.insert(f.clone());
+                v.insert(f);
                 IddFunc::Node(f)
-            },
+            }
         }
     }
 
@@ -147,35 +148,42 @@ impl LabelIdd {
     where
         F: Fn(isize, isize) -> isize,
     {
-        if a.is_const() && b.is_const() {
-            return self.constant(f(a.as_const().unwrap(), b.as_const().unwrap()));
-        } else if b.is_const() {
-            let n = self.nodes[a.as_node_idx().unwrap()].clone();
-            let add_lo = self.arith_op(n.lo.clone(), b.clone(), f);
-            let add_hi = self.arith_op(n.hi.clone(), b.clone(), f);
-            self.get_node(n.label, add_lo, add_hi)
-        } else if a.is_const() {
-            let n = self.nodes[b.as_node_idx().unwrap()].clone();
-            let add_lo = self.arith_op(a.clone(), n.lo.clone(), f);
-            let add_hi = self.arith_op(a.clone(), n.hi.clone(), f);
-            self.get_node(n.label, add_lo, add_hi)
-        } else {
-            assert!(a.is_node_idx() && b.is_node_idx());
-            let n1 = self.nodes[a.as_node_idx().unwrap()].clone();
-            let n2 = self.nodes[b.as_node_idx().unwrap()].clone();
-            if n1.label < n2.label {
-                let add_lo = self.arith_op(n1.lo.clone(), b.clone(), f);
-                let add_hi = self.arith_op(n1.hi.clone(), b.clone(), f);
-                self.get_node(n1.label, add_lo, add_hi)
-            } else if n1.label > n2.label {
-                let add_lo = self.arith_op(a.clone(), n2.lo.clone(), f);
-                let add_hi = self.arith_op(a.clone(), n2.hi.clone(), f);
-                self.get_node(n2.label, add_lo, add_hi)
-            } else {
-                assert!(n1.label == n2.label);
-                let add_lo = self.arith_op(n1.lo.clone(), n2.lo.clone(), f);
-                let add_hi = self.arith_op(n1.hi.clone(), n2.hi.clone(), f);
-                self.get_node(n1.label, add_lo, add_hi)
+        match (a.is_const(), b.is_const()) {
+            (true, true) => self.constant(f(a.as_const().unwrap(), b.as_const().unwrap())),
+            (false, true) => {
+                let n = self.nodes[a.as_node_idx().unwrap()].clone();
+                let add_lo = self.arith_op(n.lo.clone(), b.clone(), f);
+                let add_hi = self.arith_op(n.hi.clone(), b, f);
+                self.get_node(n.label, add_lo, add_hi)
+            }
+            (true, false) => {
+                let n = self.nodes[b.as_node_idx().unwrap()].clone();
+                let add_lo = self.arith_op(a.clone(), n.lo.clone(), f);
+                let add_hi = self.arith_op(a, n.hi.clone(), f);
+                self.get_node(n.label, add_lo, add_hi)
+            }
+            (false, false) => {
+                assert!(a.is_node_idx() && b.is_node_idx());
+                let n1 = self.nodes[a.as_node_idx().unwrap()].clone();
+                let n2 = self.nodes[b.as_node_idx().unwrap()].clone();
+                match n1.label.cmp(&n2.label) {
+                    Ordering::Less => {
+                        let add_lo = self.arith_op(n1.lo.clone(), b.clone(), f);
+                        let add_hi = self.arith_op(n1.hi.clone(), b, f);
+                        self.get_node(n1.label, add_lo, add_hi)
+                    }
+                    Ordering::Greater => {
+                        let add_lo = self.arith_op(a.clone(), n2.lo.clone(), f);
+                        let add_hi = self.arith_op(a, n2.hi.clone(), f);
+                        self.get_node(n2.label, add_lo, add_hi)
+                    }
+                    Ordering::Equal => {
+                        assert_eq!(n1.label, n2.label);
+                        let add_lo = self.arith_op(n1.lo.clone(), n2.lo.clone(), f);
+                        let add_hi = self.arith_op(n1.hi.clone(), n2.hi, f);
+                        self.get_node(n1.label, add_lo, add_hi)
+                    }
+                }
             }
         }
     }
@@ -189,11 +197,11 @@ impl LabelIdd {
     }
 
     pub fn min(&mut self, a: IddFunc, b: IddFunc) -> IddFunc {
-        self.arith_op(a, b, &|aconst, bconst| cmp::min(aconst, bconst))
+        self.arith_op(a, b, &cmp::min)
     }
 
     pub fn max(&mut self, a: IddFunc, b: IddFunc) -> IddFunc {
-        self.arith_op(a, b, &|aconst, bconst| cmp::max(aconst, bconst))
+        self.arith_op(a, b, &cmp::max)
     }
 
     pub fn eq(&self, a: IddFunc, b: IddFunc, bdd: &mut LabelBdd) -> BddFunc {
@@ -207,10 +215,10 @@ impl LabelIdd {
             let n = self.nodes[a.as_node_idx().unwrap()].clone();
             let x0 = bdd.terminal(n.label);
             let eq_lo = self.eq(n.lo.clone(), b.clone(), bdd);
-            let eq_hi = self.eq(n.hi.clone(), b.clone(), bdd);
+            let eq_hi = self.eq(n.hi, b, bdd);
             bdd.ite(x0, eq_hi, eq_lo)
         } else {
-            self.eq(b.clone(), a.clone(), bdd)
+            self.eq(b, a, bdd)
         }
     }
 
@@ -225,9 +233,7 @@ impl LabelIdd {
                 break;
             }
             let node = &self.nodes[f.as_node_idx().unwrap()];
-            if node.label > i {
-                continue;
-            } else if node.label == i {
+            if node.label == i {
                 f = if *val {
                     node.hi.clone()
                 } else {
@@ -257,19 +263,19 @@ mod test {
         let c1 = idd.constant(1);
         let c2 = idd.constant(2);
 
-        assert!(idd.evaluate(c0.clone(), &[]) == Some(0));
-        assert!(idd.evaluate(c1.clone(), &[]) == Some(1));
-        assert!(idd.evaluate(c2.clone(), &[]) == Some(2));
+        assert_eq!(idd.evaluate(c0.clone(), &[]), Some(0));
+        assert_eq!(idd.evaluate(c1.clone(), &[]), Some(1));
+        assert_eq!(idd.evaluate(c2.clone(), &[]), Some(2));
 
         let c3a = idd.add(c1.clone(), c2.clone());
         let c3b = idd.add(c2.clone(), c1.clone());
         let c2a = idd.add(c1.clone(), c1.clone());
         let c5 = idd.add(c3a.clone(), c2a.clone());
 
-        assert!(idd.evaluate(c3a.clone(), &[]) == Some(3));
-        assert!(idd.evaluate(c3b.clone(), &[]) == Some(3));
-        assert!(idd.evaluate(c2a.clone(), &[]) == Some(2));
-        assert!(idd.evaluate(c5.clone(), &[]) == Some(5));
+        assert_eq!(idd.evaluate(c3a.clone(), &[]), Some(3));
+        assert_eq!(idd.evaluate(c3b.clone(), &[]), Some(3));
+        assert_eq!(idd.evaluate(c2a.clone(), &[]), Some(2));
+        assert_eq!(idd.evaluate(c5.clone(), &[]), Some(5));
     }
 
     #[test]
@@ -282,28 +288,28 @@ mod test {
         let x4 = idd.min(x0.clone(), x1.clone());
         let x5 = idd.max(x0.clone(), x1.clone());
 
-        assert!(idd.evaluate(x2.clone(), &[false, false]) == Some(45));
-        assert!(idd.evaluate(x2.clone(), &[false, true]) == Some(50));
-        assert!(idd.evaluate(x2.clone(), &[true, false]) == Some(55));
-        assert!(idd.evaluate(x2.clone(), &[true, true]) == Some(60));
+        assert_eq!(idd.evaluate(x2.clone(), &[false, false]), Some(45));
+        assert_eq!(idd.evaluate(x2.clone(), &[false, true]), Some(50));
+        assert_eq!(idd.evaluate(x2.clone(), &[true, false]), Some(55));
+        assert_eq!(idd.evaluate(x2.clone(), &[true, true]), Some(60));
 
-        assert!(idd.evaluate(x3.clone(), &[false, false]) == Some(-25));
-        assert!(idd.evaluate(x3.clone(), &[false, true]) == Some(-30));
-        assert!(idd.evaluate(x3.clone(), &[true, false]) == Some(-15));
-        assert!(idd.evaluate(x3.clone(), &[true, true]) == Some(-20));
+        assert_eq!(idd.evaluate(x3.clone(), &[false, false]), Some(-25));
+        assert_eq!(idd.evaluate(x3.clone(), &[false, true]), Some(-30));
+        assert_eq!(idd.evaluate(x3.clone(), &[true, false]), Some(-15));
+        assert_eq!(idd.evaluate(x3.clone(), &[true, true]), Some(-20));
 
-        assert!(idd.evaluate(x4.clone(), &[false, false]) == Some(10));
-        assert!(idd.evaluate(x4.clone(), &[false, true]) == Some(10));
-        assert!(idd.evaluate(x4.clone(), &[true, false]) == Some(20));
-        assert!(idd.evaluate(x4.clone(), &[true, true]) == Some(20));
+        assert_eq!(idd.evaluate(x4.clone(), &[false, false]), Some(10));
+        assert_eq!(idd.evaluate(x4.clone(), &[false, true]), Some(10));
+        assert_eq!(idd.evaluate(x4.clone(), &[true, false]), Some(20));
+        assert_eq!(idd.evaluate(x4.clone(), &[true, true]), Some(20));
 
-        assert!(idd.evaluate(x5.clone(), &[false, false]) == Some(35));
-        assert!(idd.evaluate(x5.clone(), &[false, true]) == Some(40));
-        assert!(idd.evaluate(x5.clone(), &[true, false]) == Some(35));
-        assert!(idd.evaluate(x5.clone(), &[true, true]) == Some(40));
+        assert_eq!(idd.evaluate(x5.clone(), &[false, false]), Some(35));
+        assert_eq!(idd.evaluate(x5.clone(), &[false, true]), Some(40));
+        assert_eq!(idd.evaluate(x5.clone(), &[true, false]), Some(35));
+        assert_eq!(idd.evaluate(x5.clone(), &[true, true]), Some(40));
 
-        assert!(idd.evaluate(x4.clone(), &[true]) == Some(20));
-        assert!(idd.evaluate(x5.clone(), &[true]) == None);
+        assert_eq!(idd.evaluate(x4.clone(), &[true]), Some(20));
+        assert_eq!(idd.evaluate(x5.clone(), &[true]), None);
     }
 
     #[test]
@@ -315,9 +321,18 @@ mod test {
         let x3_bdd = bdd.not(x1_bdd);
         let x4_bdd = bdd.or(x2_bdd, x3_bdd);
         let idd = LabelIdd::from_bdd(&bdd);
-        assert!(idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[true, false]) == Some(1));
-        assert!(idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[false, false]) == Some(1));
-        assert!(idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[false, true]) == Some(0));
+        assert_eq!(
+            idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[true, false]),
+            Some(1),
+        );
+        assert_eq!(
+            idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[false, false]),
+            Some(1),
+        );
+        assert_eq!(
+            idd.evaluate(IddFunc::from_bdd_func(x4_bdd), &[false, true]),
+            Some(0),
+        );
     }
 
     #[test]
@@ -329,12 +344,12 @@ mod test {
         let x3 = idd.sub(x0.clone(), x1.clone());
         let x4 = idd.min(x0.clone(), x1.clone());
         let x5 = idd.max(x0.clone(), x1.clone());
-        assert!(idd.max_value(x0) == 20);
-        assert!(idd.max_value(x1) == 40);
-        assert!(idd.max_value(x2) == 60);
-        assert!(idd.max_value(x3) == -15);
-        assert!(idd.max_value(x4) == 20);
-        assert!(idd.max_value(x5) == 40);
+        assert_eq!(idd.max_value(x0), 20);
+        assert_eq!(idd.max_value(x1), 40);
+        assert_eq!(idd.max_value(x2), 60);
+        assert_eq!(idd.max_value(x3), -15);
+        assert_eq!(idd.max_value(x4), 20);
+        assert_eq!(idd.max_value(x5), 40);
     }
 
     #[test]
@@ -346,11 +361,11 @@ mod test {
         let x3 = idd.min(x0.clone(), x1.clone());
         let mut bdd = LabelBdd::new();
         let eq0 = idd.eq(x3.clone(), x0.clone(), &mut bdd);
-        assert!(eq0 == BDD_ONE);
+        assert_eq!(eq0, BDD_ONE);
         let const45 = idd.constant(45);
         let eq1 = idd.eq(x2.clone(), const45, &mut bdd);
-        assert!(bdd.evaluate(eq1, &[false, false]) == Some(true));
-        assert!(bdd.evaluate(eq1, &[false, true]) == Some(false));
-        assert!(bdd.evaluate(eq1, &[true]) == Some(false));
+        assert_eq!(bdd.evaluate(eq1, &[false, false]), Some(true));
+        assert_eq!(bdd.evaluate(eq1, &[false, true]), Some(false));
+        assert_eq!(bdd.evaluate(eq1, &[true]), Some(false));
     }
 }

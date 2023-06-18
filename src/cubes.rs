@@ -151,7 +151,7 @@ const CUBELIST_ALLOCED_SIZE: usize = 4;
 ///
 /// The `CubeList` abstraction is used internally to convert from a `Bdd`
 /// to a quasi-minimized Boolean expression.
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct CubeList(SmallVec<[Cube; CUBE_ALLOCED_SIZE]>);
 
 impl PartialEq for CubeList {
@@ -162,13 +162,13 @@ impl PartialEq for CubeList {
 
 impl CubeList {
     /// Construct a new, empty, cube list (equivalent to a constant `false`).
-    pub fn new() -> CubeList {
-        CubeList(SmallVec::new())
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Construct a cube list from a list of `Cube` structs.
-    pub fn from_list(cubes: &[Cube]) -> CubeList {
-        CubeList(cubes.iter().map(|c| c.clone()).collect())
+    pub fn from_list(cubes: &[Cube]) -> Self {
+        Self(cubes.iter().cloned().collect())
     }
 
     /// Return an iterator over all cubes.
@@ -180,7 +180,7 @@ impl CubeList {
     /// possible. The resulting cube list is not guaranteed to be minimal (that
     /// is the set-cover problem, which is NP-Complete), but is reduced somewhat
     /// by a very simple reduction/merging algorithm.
-    pub fn merge(&self, other: &CubeList) -> CubeList {
+    pub fn merge(&self, other: &Self) -> Self {
         let mut out: SmallVec<[Cube; CUBE_ALLOCED_SIZE]> = SmallVec::new();
         let mut canceled: SmallVec<[bool; CUBE_ALLOCED_SIZE]> = SmallVec::new();
         for cube in self.0.iter().chain(other.0.iter()) {
@@ -237,11 +237,11 @@ impl CubeList {
             .filter(|&(_, flag)| !flag)
             .map(|(cube, _)| cube)
             .collect();
-        CubeList(out)
+        Self(out)
     }
 
-    pub fn with_var(&self, idx: usize, val: CubeVar) -> CubeList {
-        CubeList(
+    pub fn with_var(&self, idx: usize, val: CubeVar) -> Self {
+        Self(
             self.0
                 .iter()
                 .map(|c| c.with_var(idx, val.clone()))

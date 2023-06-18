@@ -5,6 +5,7 @@
 //
 
 use std::cmp;
+use std::cmp::Ordering;
 use std::collections::hash_map::Entry as HashEntry;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -126,18 +127,20 @@ impl LabelBdd {
         }
 
         let node = self.nodes[f].clone();
-        if label < node.label {
-            f
-        } else if label == node.label {
-            if val {
-                node.hi
-            } else {
-                node.lo
+        match label.cmp(&node.label) {
+            Ordering::Less => f,
+            Ordering::Equal => {
+                if val {
+                    node.hi
+                } else {
+                    node.lo
+                }
             }
-        } else {
-            let lo = self.restrict(node.lo, label, val);
-            let hi = self.restrict(node.hi, label, val);
-            self.get_node(node.label, lo, hi)
+            Ordering::Greater => {
+                let lo = self.restrict(node.lo, label, val);
+                let hi = self.restrict(node.hi, label, val);
+                self.get_node(node.label, lo, hi)
+            }
         }
     }
 
@@ -208,9 +211,7 @@ impl LabelBdd {
                 break;
             }
             let node = &self.nodes[f];
-            if node.label > i {
-                continue;
-            } else if node.label == i {
+            if node.label == i {
                 f = if *val { node.hi } else { node.lo };
             }
         }
@@ -230,26 +231,28 @@ impl LabelBdd {
         let hi = self.nodes[n].hi;
         let lo_list = match lo {
             BDD_ZERO => CubeList::new(),
-            BDD_ONE => CubeList::from_list(&[Cube::true_cube(nvars)])
-                .with_var(label as usize, CubeVar::False),
+            BDD_ONE => {
+                CubeList::from_list(&[Cube::true_cube(nvars)]).with_var(label, CubeVar::False)
+            }
             _ => {
                 self.compute_cubelist(memoize_vec, lo, nvars);
                 memoize_vec[lo]
                     .as_ref()
                     .unwrap()
-                    .with_var(label as usize, CubeVar::False)
+                    .with_var(label, CubeVar::False)
             }
         };
         let hi_list = match hi {
             BDD_ZERO => CubeList::new(),
-            BDD_ONE => CubeList::from_list(&[Cube::true_cube(nvars)])
-                .with_var(label as usize, CubeVar::True),
+            BDD_ONE => {
+                CubeList::from_list(&[Cube::true_cube(nvars)]).with_var(label, CubeVar::True)
+            }
             _ => {
                 self.compute_cubelist(memoize_vec, hi, nvars);
                 memoize_vec[hi]
                     .as_ref()
                     .unwrap()
-                    .with_var(label as usize, CubeVar::True)
+                    .with_var(label, CubeVar::True)
             }
         };
         let new_list = lo_list.merge(&hi_list);
@@ -260,18 +263,18 @@ impl LabelBdd {
         c.vars()
             .enumerate()
             .flat_map(|(i, v)| match v {
-                &CubeVar::False => Some(Expr::not(Expr::Terminal(i))),
-                &CubeVar::True => Some(Expr::Terminal(i)),
-                &CubeVar::DontCare => None,
+                CubeVar::False => Some(!Expr::Terminal(i)),
+                CubeVar::True => Some(Expr::Terminal(i)),
+                CubeVar::DontCare => None,
             })
-            .reduce(|a, b| Expr::and(a, b))
+            .reduce(Expr::and)
             .unwrap_or(Expr::Const(true))
     }
 
     fn cubelist_to_expr(&self, c: &CubeList) -> Expr<BddLabel> {
         c.cubes()
             .map(|c| self.cube_to_expr(c))
-            .reduce(|a, b| Expr::or(a, b))
+            .reduce(Expr::or)
             .unwrap_or(Expr::Const(false))
     }
 
@@ -396,10 +399,7 @@ impl<T> Bdd<T> {
 
     /// Check whether the function `f` within the BDD is satisfiable.
     pub fn sat(&self, f: BddFunc) -> bool {
-        match f {
-            BDD_ZERO => false,
-            _ => true,
-        }
+        f != BDD_ZERO
     }
 
     /// Produce an ordered set of nodes in the BDD function `f`: the transitive closure of
@@ -431,7 +431,7 @@ impl<T: Clone> Bdd<T> {
     pub fn to_expr(&self, f: BddFunc) -> Expr<T> {
         self.bdd
             .to_expr(f, self.rev_labels.len())
-            .map(|t: &BddLabel| self.rev_labels[*t as usize].clone())
+            .map(|t: &BddLabel| self.rev_labels[*t].clone())
     }
 }
 
@@ -462,7 +462,7 @@ impl<T: Debug> Bdd<T> {
         out.push_str(&format!("n{} [label=\"0\"];\n", BDD_ZERO));
         out.push_str(&format!("n{} [label=\"1\"];\n", BDD_ONE));
 
-        out.push_str("}");
+        out.push('}');
 
         out.to_string()
     }
@@ -481,7 +481,7 @@ impl<T: Eq + Hash> Bdd<T> {
         let mut valarray = Vec::with_capacity(size);
         valarray.resize(size, false);
         for (t, l) in &self.labels {
-            valarray[*l as usize] = *values.get(t).unwrap_or(&false);
+            valarray[*l] = *values.get(t).unwrap_or(&false);
         }
         self.bdd.evaluate(f, &valarray).unwrap()
     }
@@ -551,18 +551,18 @@ impl<T: Eq + Hash + Clone> Bdd<T> {
     /// `e`, which may contain ANDs, ORs, NOTs, terminals, and constants.
     pub fn from_expr(&mut self, e: &Expr<T>) -> BddFunc {
         match e {
-            &Expr::Terminal(ref t) => self.terminal(t.clone()),
+            Expr::Terminal(t) => self.terminal(t.clone()),
             &Expr::Const(val) => self.constant(val),
-            &Expr::Not(ref x) => {
+            Expr::Not(x) => {
                 let xval = self.from_expr(&**x);
                 self.not(xval)
             }
-            &Expr::And(ref a, ref b) => {
+            Expr::And(a, b) => {
                 let aval = self.from_expr(&**a);
                 let bval = self.from_expr(&**b);
                 self.and(aval, bval)
             }
-            &Expr::Or(ref a, ref b) => {
+            Expr::Or(a, b) => {
                 let aval = self.from_expr(&**a);
                 let bval = self.from_expr(&**b);
                 self.or(aval, bval)
@@ -649,7 +649,7 @@ impl<T: Clone> PersistedBdd<T> {
 
     /// Persist all labels and nodes in the BDD.
     pub fn persist_all<E>(&mut self, out: &dyn BddOutput<T, E>) -> Result<(), E> {
-        if self.bdd.bdd.nodes.len() > 0 {
+        if !self.bdd.bdd.nodes.is_empty() {
             let last_f = self.bdd.bdd.nodes.len() - 1;
             self.persist(last_f, out)
         } else {
@@ -743,7 +743,7 @@ mod test {
         let mut b = Bdd::new();
         let expr = Expr::or(
             Expr::and(Expr::Terminal(0), Expr::Terminal(1)),
-            Expr::and(Expr::not(Expr::Terminal(2)), Expr::not(Expr::Terminal(3))),
+            Expr::and(!Expr::Terminal(2), !Expr::Terminal(3)),
         );
         let f = b.from_expr(&expr);
         test_bdd(&b, f, &mut h, &[false, false, true, true], false);
@@ -827,7 +827,7 @@ mod test {
             Expr::or(Expr::Terminal(1), Expr::Terminal(0))
         );
         let f_not = b.not(f_0);
-        assert_eq!(b.to_expr(f_not), Expr::not(Expr::Terminal(0)));
+        assert_eq!(b.to_expr(f_not), !Expr::Terminal(0));
         let f_2 = b.terminal(2);
         let f_1_or_2 = b.or(f_1, f_2);
         let f_0_and_1_or_2 = b.and(f_0, f_1_or_2);
